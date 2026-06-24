@@ -1,0 +1,128 @@
+{{template "layout_start" .}}
+<section class="providers-hero dashboard-hero-modern">
+  <div>
+    <p class="eyebrow">Endpoint security</p>
+    <h1>{{tr .T "api_keys.title"}}</h1>
+    <p>{{if eq .Lang "vi"}}Quản lý nhiều API key nội bộ: tạo, sửa, bật/tắt, giới hạn model, request, token và USD cho từng key. Để trống hoặc nhập 0 nghĩa là không giới hạn.{{else}}Manage local API keys: create, edit, enable/disable and limit models, requests, tokens and USD per key. Blank or 0 means unlimited.{{end}}</p>
+  </div>
+  <div class="dashboard-status-pill">
+    <span>{{if .Settings.RequireAPIKey}}/v1 protected{{else}}/v1 open local{{end}}</span>
+    <strong>{{len .Settings.APIKeys}} keys</strong>
+  </div>
+</section>
+
+<form method="post" class="settings-modern-grid api-keys-page" id="api-keys-form">
+  <section class="panel settings-card settings-card-wide api-key-manager api-key-auth-card">
+    <div class="section-title-row">
+      <div>
+        <p class="eyebrow">Gateway auth</p>
+        <h2>{{if eq .Lang "vi"}}Bảo vệ endpoint API{{else}}API endpoint protection{{end}}</h2>
+        <p>{{if eq .Lang "vi"}}Bật bảo vệ để yêu cầu API key cho mọi request vào{{else}}Enable protection to require an API key for all requests to{{end}} <code>/v1/*</code>.</p>
+      </div>
+      <span class="badge {{if .Settings.RequireAPIKey}}badge-success{{else}}badge-muted{{end}}" data-require-api-key-status>{{if .Settings.RequireAPIKey}}{{if eq .Lang "vi"}}Đang bảo vệ{{else}}Protected{{end}}{{else}}{{if eq .Lang "vi"}}Tắt bảo vệ{{else}}Open local{{end}}{{end}}</span>
+    </div>
+    <label class="api-key-toggle-row">
+      <input name="require_api_key" type="checkbox" {{if .Settings.RequireAPIKey}}checked{{end}}>
+      <span class="api-key-switch" aria-hidden="true"><span></span></span>
+      <span class="api-key-toggle-copy">
+        <strong>{{if eq .Lang "vi"}}Yêu cầu API key cho{{else}}Require API key for{{end}} <code>/v1/*</code></strong>
+        <small>{{if eq .Lang "vi"}}Khi bật, client phải gửi key nội bộ hợp lệ; khi tắt, endpoint chỉ mở cục bộ.{{else}}When enabled, clients must send a valid local key; when disabled, the endpoint stays open locally.{{end}}</small>
+      </span>
+    </label>
+    <p class="wide provider-warning" id="require-api-key-warning" hidden>{{if eq .Lang "vi"}}⚠ Bạn chưa có API key nào. Bật tùy chọn này sẽ chặn toàn bộ request đến{{else}}⚠ No API keys exist yet. Enabling this will block all requests to{{end}} <code>/v1/*</code>.</p>
+    <textarea name="api_keys" id="api-keys-text" hidden>{{.APIKeysText}}</textarea>
+  </section>
+
+  <section class="panel settings-card settings-card-wide api-key-manager api-key-policies-card">
+    <div class="section-title-row">
+      <div>
+        <p class="eyebrow">Key policies</p>
+        <h2>{{if eq .Lang "vi"}}Danh sách API key{{else}}API key list{{end}}</h2>
+        <p>{{if eq .Lang "vi"}}Giới hạn bằng 0 hoặc bỏ trống sẽ được xử lý là{{else}}Limits set to 0 or left blank are treated as{{end}} <strong>∞ unlimited</strong>.</p>
+      </div>
+      <button type="button" class="provider-add-btn api-key-create-btn" data-open-modal="api-key-policy-modal" title="{{if eq .Lang "vi"}}Tạo API key{{else}}Create API Key{{end}}">+</button>
+    </div>
+    <div class="api-key-card-grid" id="api-key-card-grid">
+      {{range .Settings.APIKeys}}
+      <article class="api-key-card api-key-card-modern {{if not .Enabled}}is-disabled{{end}}" data-api-key-card>
+        <input type="hidden" data-api-key-field="enabled" value="{{.Enabled}}">
+        <input type="hidden" data-api-key-field="id" value="{{.ID}}">
+        <input type="hidden" data-api-key-field="key" value="{{.Key}}">
+        <input type="hidden" data-api-key-field="models" value="{{range $i, $m := .AllowedModels}}{{if $i}},{{end}}{{$m}}{{end}}">
+        <input type="hidden" data-api-key-field="requests" value="{{if gt .MaxRequests 0}}{{.MaxRequests}}{{end}}">
+        <input type="hidden" data-api-key-field="tokens" value="{{if gt .MaxTokens 0}}{{.MaxTokens}}{{end}}">
+        <input type="hidden" data-api-key-field="usd" value="{{if gt .MaxCostUSD 0.0}}{{printf "%.6f" .MaxCostUSD}}{{end}}">
+        <div class="api-key-card-head api-key-card-head-modern">
+          <div class="api-key-title-block">
+            <span class="badge {{if .Enabled}}badge-success{{else}}badge-muted{{end}}" data-api-key-status>{{if .Enabled}}Active{{else}}Disabled{{end}}</span>
+            <h3>{{.ID}}</h3>
+          </div>
+          <div class="api-key-card-menu"><span aria-hidden="true">•••</span></div>
+        </div>
+        <div class="api-key-secret-row">
+          <code class="api-key-secret" title="{{.Key}}">{{.Key}}</code>
+          <button type="button" class="btn-secondary js-copy-api-key">{{if eq $.Lang "vi"}}Copy{{else}}Copy{{end}} 📋</button>
+        </div>
+        <div class="api-key-limits api-key-quota-grid">
+          <span class="api-key-quota" data-used="{{.UsedRequests}}" data-limit="{{.MaxRequests}}"><small>Requests</small><strong title="{{fmtTokens .UsedRequests}}/{{if .MaxRequests}}{{fmtTokens .MaxRequests}}{{else}}∞{{end}}">{{fmtTokensShort .UsedRequests}}/{{if .MaxRequests}}{{fmtTokensShort .MaxRequests}}{{else}}∞{{end}}</strong><i></i></span>
+          <span class="api-key-quota" data-used="{{.UsedTokens}}" data-limit="{{.MaxTokens}}"><small>Tokens</small><strong title="{{fmtTokens .UsedTokens}}/{{if .MaxTokens}}{{fmtTokens .MaxTokens}}{{else}}∞{{end}}">{{fmtTokensShort .UsedTokens}}/{{if .MaxTokens}}{{fmtTokensShort .MaxTokens}}{{else}}∞{{end}}</strong><i></i></span>
+          <span class="api-key-quota" data-used="{{printf "%.6f" .UsedCostUSD}}" data-limit="{{printf "%.6f" .MaxCostUSD}}"><small>{{if eq $.Lang "vi"}}Chi phí{{else}}Cost{{end}}</small><strong title="${{fmtCost .UsedCostUSD}}/{{if .MaxCostUSD}}${{fmtCost .MaxCostUSD}}{{else}}∞{{end}}">${{fmtCost .UsedCostUSD}}/{{if .MaxCostUSD}}${{fmtCost .MaxCostUSD}}{{else}}∞{{end}}</strong><i></i></span>
+        </div>
+        <div class="api-key-card-footer">
+          <p class="muted-text">Models: {{if .AllowedModels}}{{range $i, $m := .AllowedModels}}{{if $i}}, {{end}}<code>{{$m}}</code>{{end}}{{else}}<code>*</code>{{end}}</p>
+          <div class="inline-actions api-key-actions"><button type="button" class="btn-secondary js-edit-api-key">{{tr $.T "common.edit"}}</button><button type="button" class="btn-secondary js-toggle-api-key">{{if .Enabled}}{{tr $.T "common.disable"}}{{else}}{{tr $.T "common.enable"}}{{end}}</button><button type="button" class="btn-danger js-remove-api-key">{{tr $.T "common.delete"}}</button></div>
+        </div>
+      </article>
+      {{else}}
+      <article class="api-key-empty api-key-empty-modern" id="api-key-empty-state">
+        <div class="api-key-empty-icon">🔐</div>
+        <h3>{{if eq .Lang "vi"}}Chưa có API key policy{{else}}No API key policy{{end}}</h3>
+        <p>{{if eq .Lang "vi"}}Tạo key đầu tiên để bảo vệ endpoint và theo dõi quota theo từng client.{{else}}Create the first key to protect endpoints and track quota per client.{{end}}</p>
+        <button type="button" data-open-modal="api-key-policy-modal">{{if eq .Lang "vi"}}Tạo key đầu tiên{{else}}Create first key{{end}}</button>
+      </article>
+      {{end}}
+    </div>
+  </section>
+
+  <div class="settings-submit-bar">
+    <button type="submit">{{tr .T "common.save"}}</button>
+  </div>
+</form>
+
+<div class="provider-modal" id="api-key-policy-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="api-key-policy-title">
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head">
+      <div>
+        <p class="eyebrow">API Key Policy</p>
+        <h2 id="api-key-policy-title">{{if eq .Lang "vi"}}Tạo / sửa API key{{else}}Create / edit API key{{end}}</h2>
+      </div>
+      <button type="button" class="icon-btn" data-close-modal>×</button>
+    </div>
+    <div class="provider-form-grid" id="api-key-policy-form">
+      <input type="hidden" data-new-api-key="editing" value="">
+      <label>Name / ID<input data-new-api-key="id" placeholder="auto if blank"></label>
+      <label>Secret key<span class="copy-input-row"><input data-new-api-key="key" placeholder="auto sk-... if blank"><button type="button" class="btn-secondary js-generate-api-secret">Generate</button></span></label>
+      <label>{{if eq .Lang "vi"}}Chọn provider{{else}}Select provider{{end}}
+        <select data-api-key-provider-picker>
+          <option value="">{{if eq .Lang "vi"}}Chọn provider{{else}}Select provider{{end}}</option>
+          {{range .Providers}}{{if .Models}}<option value="{{.ID}}">{{.ID}} ({{.Type}})</option>{{end}}{{end}}
+        </select>
+      </label>
+      <label>{{if eq .Lang "vi"}}Chọn model{{else}}Select model{{end}}
+        <select data-api-key-model-picker>
+          <option value="">{{if eq .Lang "vi"}}Chọn model{{else}}Select model{{end}}</option>
+          {{range .Providers}}{{$providerID := .ID}}{{range .Models}}<option value="{{.}}" data-provider-option="{{$providerID}}">{{.}}</option>{{end}}{{end}}
+        </select>
+      </label>
+      <label class="wide">Allowed models<input data-new-api-key="models" placeholder="*, gpt-4.1, cx/gpt-5.5"></label>
+      <label>Max requests<input data-new-api-key="requests" type="number" min="0" placeholder="0 = unlimited"></label>
+      <label>Max tokens<input data-new-api-key="tokens" type="number" min="0" placeholder="0 = unlimited"></label>
+      <label>Max USD<input data-new-api-key="usd" type="number" min="0" step="0.000001" placeholder="0 = unlimited"></label>
+      <div class="form-actions wide">
+        <button type="button" class="btn-secondary" data-close-modal>{{tr .T "common.cancel"}}</button>
+        <button type="button" class="js-add-api-key-policy">{{tr .T "common.save"}}</button>
+      </div>
+    </div>
+  </article>
+</div>
+{{template "layout_end" .}}

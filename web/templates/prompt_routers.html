@@ -1,0 +1,194 @@
+{{template "layout_start" .}}
+<section class="dashboard-hero-modern combo-hero">
+  <div>
+    <p class="eyebrow">LLM Prompt Router</p>
+    <h1>{{if eq .Lang "vi"}}Điều phối prompt theo vai trò{{else}}Role-based prompt routing{{end}}</h1>
+    <p>{{if eq .Lang "vi"}}Đặt tên model ảo, chọn model classifier, rồi khai báo planner / architect / dev / qa / docs hoặc role tùy chỉnh.{{else}}Name a virtual model, choose a classifier model, then map planner / architect / dev / qa / docs or custom roles.{{end}}</p>
+  </div>
+  <div class="combo-hero-stats">
+    <span>{{if eq .Lang "vi"}}Router đang lưu{{else}}Saved routers{{end}}</span>
+    <strong>{{len .Settings.PromptRouters}}</strong>
+    <small>{{if eq .Lang "vi"}}model ảo{{else}}virtual models{{end}}</small>
+  </div>
+</section>
+
+<datalist id="router-target-options">
+  {{range .AvailableModels}}<option value="{{.Value}}">{{.Provider}} · {{.Model}}</option>{{end}}
+  {{range .Settings.Combos}}<option value="{{.Name}}">combo · {{.Description}}</option>{{end}}
+</datalist>
+
+<form method="post" class="combo-page">
+  <section class="panel combo-builder-shell">
+    <div class="section-title-row combo-title-row">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Tạo / cập nhật router{{else}}Create / update router{{end}}</p>
+        <h2>{{if eq .Lang "vi"}}Thông tin router{{else}}Router details{{end}}</h2>
+        <p>{{if eq .Lang "vi"}}Nếu tên trùng router đã có, cấu hình mới sẽ cập nhật router đó.{{else}}If the name matches an existing router, this form updates it.{{end}}</p>
+      </div>
+      <button type="submit">{{tr .T "common.save"}}</button>
+    </div>
+    <div class="combo-field-stack">
+      <div class="combo-field-row combo-field-row-primary">
+        <label>{{if eq .Lang "vi"}}Tên model ảo{{else}}Virtual model name{{end}}
+          <input name="name" required placeholder="router-auto">
+          <small>{{if eq .Lang "vi"}}Client gọi model này, ví dụ router-auto.{{else}}Clients call this model, for example router-auto.{{end}}</small>
+        </label>
+        <label>{{if eq .Lang "vi"}}Mô tả{{else}}Description{{end}}
+          <input name="description" placeholder="Auto route planner / architect / dev / QA / docs">
+          <small>{{if eq .Lang "vi"}}Ghi chú ngắn để nhận biết mục đích.{{else}}Short note for this router's purpose.{{end}}</small>
+        </label>
+      </div>
+      <div class="combo-field-row combo-field-row-routing">
+        <label>{{if eq .Lang "vi"}}Classifier model{{else}}Classifier model{{end}}
+          <input name="classifier_model" list="router-target-options" required placeholder="openai/gpt-4.1">
+          <small>{{if eq .Lang "vi"}}Model/API dùng để phân loại prompt raw.{{else}}Model/API used to classify the raw prompt.{{end}}</small>
+        </label>
+        <label>{{if eq .Lang "vi"}}Fallback target{{else}}Fallback target{{end}}
+          <input name="fallback_target" list="router-target-options" placeholder="để trống = classifier model">
+          <small>{{if eq .Lang "vi"}}Dùng khi classifier lỗi hoặc role không match.{{else}}Used when classification fails or role is unknown.{{end}}</small>
+        </label>
+        <label>{{if eq .Lang "vi"}}Fallback role{{else}}Fallback role{{end}}
+          <input name="fallback_role" placeholder="planner">
+          <small>{{if eq .Lang "vi"}}Để trống = planner.{{else}}Blank = planner.{{end}}</small>
+        </label>
+      </div>
+      <label class="combo-toggle-card" style="justify-content:flex-start;text-align:left;align-items:flex-start;">
+        <span style="text-align:left;"><strong>{{if eq .Lang "vi"}}Đang bật{{else}}Enabled{{end}}</strong><small>{{if eq .Lang "vi"}}Bật để router xuất hiện trong /v1/models.{{else}}Expose this router in /v1/models.{{end}}</small></span>
+        <input name="enabled" type="checkbox" checked style="margin-left:auto;">
+      </label>
+      <label class="combo-toggle-card" style="justify-content:flex-start;text-align:left;align-items:flex-start;">
+        <span style="text-align:left;"><strong>{{if eq .Lang "vi"}}D&#249;ng prompt raw g&#7889;c cho classifier{{else}}Use raw original prompt for classifier{{end}}</strong><small>{{if eq .Lang "vi"}}M&#7863;c &#273;&#7883;nh t&#7855;t &#273;&#7875; ti&#7871;t ki&#7879;m token. B&#7853;t l&#234;n c&#243; th&#7875; t&#259;ng &#273;&#7897; ch&#237;nh x&#225;c ph&#226;n lo&#7841;i nh&#432;ng s&#7869; t&#259;ng token/chi ph&#237; r&#7845;t m&#7841;nh.{{else}}Off by default to save tokens. Turning this on can improve routing accuracy but may greatly increase token usage/cost.{{end}}</small></span>
+        <input name="use_raw_prompt" type="checkbox" style="margin-left:auto;">
+      </label>
+      <label class="wide dashboard-message-field">{{if eq .Lang "vi"}}Prompt điều phối classifier{{else}}Classifier prompt template{{end}}
+        <textarea name="classifier_prompt_template" placeholder="Classify the user's raw prompt into exactly one role from this list: {{`{{roles}}`}}. {{`{{json_schema}}`}}"></textarea>
+        <small>{{if eq .Lang "vi"}}Để trống để dùng prompt mặc định. Hỗ trợ placeholder {{`{{roles}}`}} và {{`{{json_schema}}`}}. Prompt request vẫn được gửi ở user message riêng.{{else}}Leave blank to use the default prompt. Supports {{`{{roles}}`}} and {{`{{json_schema}}`}} placeholders. The request prompt is still sent as a separate user message.{{end}}</small>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel combo-picker-shell">
+    <div class="section-title-row combo-title-row">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Vai trò routing{{else}}Routing roles{{end}}</p>
+        <h2>{{if eq .Lang "vi"}}5 role mặc định + role tùy chỉnh{{else}}5 default roles + custom roles{{end}}</h2>
+        <p>{{if eq .Lang "vi"}}Mặc định gồm planner, architect, dev, qa, docs. Có thể thêm role mới không giới hạn theo nhu cầu.{{else}}Defaults include planner, architect, dev, qa, docs. Add custom roles as needed.{{end}}</p>
+      </div>
+      <button type="button" class="btn-secondary js-add-router-role">{{if eq .Lang "vi"}}Thêm role{{else}}Add role{{end}}</button>
+    </div>
+    <input type="hidden" name="role_count" id="router-role-count" value="5">
+    <div id="router-role-list">
+      {{range $i := seq 1 5}}
+      <div class="combo-form-card router-role-card" style="margin-bottom:1rem;" data-router-role-row>
+        <div class="combo-field-stack">
+          <div class="combo-field-row combo-field-row-routing">
+            <label>Role
+              <input name="role_{{$i}}" value="{{if eq $i 1}}planner{{else if eq $i 2}}architect{{else if eq $i 3}}dev{{else if eq $i 4}}qa{{else}}docs{{end}}">
+            </label>
+            <label>Complexity
+              <select name="complexity_{{$i}}"><option value="">any</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
+            </label>
+            <label>Risk
+              <select name="risk_{{$i}}"><option value="">any</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
+            </label>
+            <label>Target model / combo
+              <input name="target_{{$i}}" list="router-target-options" placeholder="để trống = fallback target">
+            </label>
+            <label class="combo-toggle-card" style="min-height:42px;">
+              <span><strong>Inject instruction</strong></span>
+              <input name="inject_{{$i}}" type="checkbox" checked>
+            </label>
+          </div>
+          <label class="wide dashboard-message-field">Instruction
+            <textarea name="instruction_{{$i}}">{{if eq $i 1}}You are a senior implementation planner. Do not write code yet. Produce a detailed implementation plan, affected files, risks, trade-offs, and verification steps.{{else if eq $i 2}}You are a senior software architect. Compare architecture options, define module boundaries and data model, evaluate performance/security/operational risks, and recommend a clear approach.{{else if eq $i 3}}You are a senior developer. Implement the requested change with minimal, maintainable code matching the existing project style. Include tests when appropriate.{{else if eq $i 4}}You are a meticulous QA engineer. Find defects, edge cases, regressions, missing validation, and missing tests.{{else}}You are a technical writer. Explain clearly with headings, examples, and practical instructions for developers using this product.{{end}}</textarea>
+          </label>
+          <button type="button" class="btn-secondary js-copy-router-role">{{if eq $.Lang "vi"}}Sao chép role{{else}}Copy role{{end}}</button>
+        </div>
+      </div>
+      {{end}}
+    </div>
+    <template id="router-role-template">
+      <div class="combo-form-card router-role-card" style="margin-bottom:1rem;" data-router-role-row>
+        <div class="combo-field-stack">
+          <div class="combo-field-row combo-field-row-routing">
+            <label>Role <input data-role-field="role" placeholder="security"></label>
+            <label>Complexity <select data-role-field="complexity"><option value="">any</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></label>
+            <label>Risk <select data-role-field="risk"><option value="">any</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></label>
+            <label>Target model / combo <input data-role-field="target" list="router-target-options" placeholder="openai/gpt-4.1"></label>
+            <label class="combo-toggle-card" style="min-height:42px;"><span><strong>Inject instruction</strong></span><input data-role-field="inject" type="checkbox" checked></label>
+          </div>
+          <label class="wide dashboard-message-field">Instruction <textarea data-role-field="instruction" placeholder="Describe what this role should focus on."></textarea></label>
+          <div class="combo-actions-row">
+            <button type="button" class="btn-secondary js-copy-router-role">{{if eq .Lang "vi"}}Sao chép role{{else}}Copy role{{end}}</button>
+            <button type="button" class="btn-secondary js-remove-router-role">{{if eq .Lang "vi"}}Xóa role này{{else}}Remove this role{{end}}</button>
+          </div>
+        </div>
+      </div>
+    </template>
+    <div class="combo-actions-row">
+      <button type="button" class="btn-secondary js-add-router-role">{{if eq .Lang "vi"}}Thêm role tùy chỉnh{{else}}Add custom role{{end}}</button>
+      <button type="submit">{{tr .T "common.save"}}</button>
+      <a class="btn-secondary" href="/prompt-routers">{{if eq .Lang "vi"}}Làm mới form{{else}}Reset form{{end}}</a>
+    </div>
+  </section>
+</form>
+
+<section class="panel combo-saved-shell">
+  <div class="section-title-row combo-title-row">
+    <div>
+      <p class="eyebrow">{{if eq .Lang "vi"}}Nhập cấu hình{{else}}Import config{{end}}</p>
+      <h2>{{if eq .Lang "vi"}}Thêm router bằng JSON{{else}}Add routers from JSON{{end}}</h2>
+      <p>{{if eq .Lang "vi"}}Dán JSON đã xuất từ router khác. Hỗ trợ 1 router, mảng router, hoặc object có khóa <code>prompt_routers</code>. Tên trùng sẽ được cập nhật.{{else}}Paste JSON exported from another router. Supports one router, an array, or an object with <code>prompt_routers</code>. Matching names are updated.{{end}}</p>
+    </div>
+  </div>
+  <form id="prompt-router-import-form" class="combo-field-stack">
+    <label class="wide dashboard-message-field">{{if eq .Lang "vi"}}JSON cấu hình Prompt Router{{else}}Prompt Router config JSON{{end}}
+      <textarea id="prompt-router-import-json" rows="10" placeholder='{"name":"router-auto","enabled":true,"classifier_model":"openai/gpt-4.1-mini","fallback_target":"openai/gpt-4.1","fallback_role":"planner","routes":[{"role":"planner","target":"openai/gpt-4.1","inject_instruction":true}]}'></textarea>
+    </label>
+    <div class="combo-actions-row">
+      <button type="submit">{{if eq .Lang "vi"}}Thêm / cập nhật từ JSON{{else}}Add / update from JSON{{end}}</button>
+      <button type="button" class="btn-secondary" id="prompt-router-import-clear">{{if eq .Lang "vi"}}Xóa ô nhập{{else}}Clear input{{end}}</button>
+    </div>
+    <div class="provider-result" id="prompt-router-import-result"></div>
+  </form>
+</section>
+
+<section class="panel combo-saved-shell">
+  <div class="section-title-row combo-title-row">
+    <div>
+      <p class="eyebrow">{{if eq .Lang "vi"}}Đã lưu{{else}}Saved{{end}}</p>
+      <h2>{{if eq .Lang "vi"}}Prompt routers hiện có{{else}}Existing prompt routers{{end}} <span class="pill">{{len .Settings.PromptRouters}}</span></h2>
+      <p>{{if eq .Lang "vi"}}Nếu chưa thấy router sau khi lưu, hãy kiểm tra đã nhập tên model ảo và classifier model. Có thể xuất JSON để chia sẻ cấu hình cho người khác.{{else}}If a router does not appear after saving, check that virtual model name and classifier model are filled. Export JSON to share configs with others.{{end}}</p>
+    </div>
+    <a class="btn-secondary" href="/api/prompt-routers/export" download="prompt-routers.json">{{if eq .Lang "vi"}}Xuất tất cả JSON{{else}}Export all JSON{{end}}</a>
+  </div>
+  <div class="combo-card-grid">
+    {{range .Settings.PromptRouters}}
+    <article class="combo-card" data-prompt-router-card>
+      <script type="application/json" class="js-prompt-router-json">{{json .}}</script>
+      <div class="combo-card-head">
+        <div><span class="combo-strategy-badge">prompt-router</span><h3>{{.Name}}</h3></div>
+        <div class="combo-card-actions">
+          <span class="combo-status {{if not .Enabled}}is-disabled{{end}}">{{if .Enabled}}enabled{{else}}disabled{{end}}</span>
+          <a class="btn-secondary" href="/api/prompt-routers/export?name={{.Name | urlquery}}" download="prompt-router-{{.Name | urlquery}}.json">{{if eq $.Lang "vi"}}Xuất JSON{{else}}Export JSON{{end}}</a>
+          <button type="button" class="btn-secondary js-copy-prompt-router-json">{{if eq $.Lang "vi"}}Copy JSON{{else}}Copy JSON{{end}}</button>
+          <button type="button" class="btn-secondary js-edit-prompt-router">{{tr $.T "common.edit"}}</button>
+          <form method="post" style="display:inline;"><input type="hidden" name="action" value="delete"><input type="hidden" name="name" value="{{.Name}}"><button type="submit" class="btn-secondary">{{tr $.T "common.delete"}}</button></form>
+        </div>
+      </div>
+      <div class="combo-metrics-row">
+        <span><small>Classifier</small><strong>{{.ClassifierModel}}</strong></span>
+        <span><small>Fallback</small><strong>{{.FallbackTarget}}</strong></span>
+        <span><small>Roles</small><strong>{{len .Routes}}</strong></span>
+        <span><small>Classifier input</small><strong>{{if .UseRawPrompt}}raw{{else}}preview{{end}}</strong></span>
+        <span><small>Classifier prompt</small><strong>{{if .ClassifierPromptTemplate}}custom{{else}}default{{end}}</strong></span>
+      </div>
+      <div class="combo-model-chip-row">{{range .Routes}}<code>{{.Role}}{{if .Complexity}} · c:{{.Complexity}}{{end}}{{if .Risk}} · r:{{.Risk}}{{end}} → {{.Target}}</code>{{end}}</div>
+      {{if .Description}}<p class="combo-card-desc">{{.Description}}</p>{{end}}
+    </article>
+    {{else}}
+    <article class="combo-empty-state"><h3>{{if eq .Lang "vi"}}Chưa có router{{else}}No routers yet{{end}}</h3><p>{{if eq .Lang "vi"}}Tạo router đầu tiên bằng form bên trên.{{else}}Create the first router with the form above.{{end}}</p></article>
+    {{end}}
+  </div>
+</section>
+{{template "layout_end" .}}

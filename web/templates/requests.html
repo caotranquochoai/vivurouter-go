@@ -1,0 +1,172 @@
+{{template "layout_start" .}}
+<section class="providers-hero dashboard-hero-modern">
+  <div>
+    <p class="eyebrow">{{tr .T "requests.title"}}</p>
+    <h1>{{tr .T "requests.title"}}</h1>
+    <p>{{tr .T "requests.desc"}} {{.RequestShown}}/{{.RequestTotal}}</p>
+  </div>
+</section>
+
+<div class="request-filter-bar">
+  <input type="search" id="request-filter-input" placeholder="{{tr .T "requests.filter"}}">
+  <span class="muted-text" id="request-filter-count">{{.RequestShown}}/{{.RequestTotal}} {{tr .T "requests.rows"}}</span>
+  <div class="request-page-size">
+    <a class="pill {{if eq .RequestLimit 25}}pill-oauth{{end}}" href="/requests?limit=25">25</a>
+    <a class="pill {{if eq .RequestLimit 50}}pill-oauth{{end}}" href="/requests?limit=50">50</a>
+    <a class="pill {{if eq .RequestLimit 100}}pill-oauth{{end}}" href="/requests?limit=100">100</a>
+  </div>
+</div>
+{{template "request_table" .}}
+{{template "layout_end" .}}
+
+{{define "request_table"}}
+<div id="request-log-list" class="request-log-list">
+	{{$root := .}}
+	{{range .RequestViews}}
+    <article class="request-log-card" data-request-row data-search="{{.Timestamp}} {{.Endpoint}} {{.ProviderID}} {{.Model}} {{.Status}} {{.APIKeyID}} {{.APIKeyMasked}} {{.APIKeyPrefix}} {{.APIKeySuffix}} {{.Error}}">
+      <div class="request-log-topline">
+        <div class="request-log-identity">
+          <span class="request-status {{if eq .Status "200"}}is-ok{{else if eq .Status "STREAM_ERROR"}}is-error{{else}}is-warn{{end}}" title="Status: {{.Status}}">{{if eq .Status "200"}}OK{{else}}{{.Status}}{{end}}</span>
+          <strong class="request-truncate" title="{{.Model}}">{{.Model}}</strong>
+        </div>
+        <div class="request-log-cost" title="${{fmtCost .CostUSD}}">${{fmtCost .CostUSD}}</div>
+      </div>
+      <div class="request-log-meta">
+        <span class="request-truncate" title="{{.ProviderID}}">{{.ProviderID}}</span>
+        <code class="request-truncate" title="{{.Endpoint}}">{{.Endpoint}}</code>
+        <span class="pill {{if .Stream}}pill-oauth{{else}}pill{{end}}" title="{{if .Stream}}Streaming request{{else}}Synchronous request{{end}}">{{if .Stream}}Stream{{else}}Sync{{end}}</span>
+        <span title="{{.DurationMS}}ms">{{.DurationMS}}ms</span>
+        <time class="request-time-full js-local-time-tooltip" data-timestamp="{{.Timestamp}}" title="{{.Timestamp}}">{{.Timestamp}}</time>
+        <small title="{{.Timestamp}}">{{relativeTime .Timestamp}}</small>
+      </div>
+      <div class="request-log-metrics">
+        {{if .RawInputTokens}}<span class="request-metric accent-purple" title="Estimated raw debug/storage input before compacting the saved debug payload: {{fmtTokens .RawInputTokens}} tokens. This is not provider billing and does not mean upstream optimization was enabled."><small>Debug raw</small><strong>{{fmtTokensShort .RawInputTokens}}</strong></span>{{end}}
+        <span class="request-metric" title="Provider input tokens actually reported/estimated for the upstream request: {{fmtTokens .PromptTokens}}"><small>Provider input</small><strong>{{fmtTokensShort .PromptTokens}}</strong></span>
+        <span class="request-metric" title="Output tokens: {{fmtTokens .CompletionTokens}}"><small>Output</small><strong>{{fmtTokensShort .CompletionTokens}}</strong></span>
+        <span class="request-metric" title="Total tokens: {{fmtTokens .TotalTokens}}"><small>Total</small><strong>{{fmtTokensShort .TotalTokens}}</strong></span>
+        {{if .CachedTokens}}<span class="request-metric accent-cyan" title="Cached tokens: {{fmtTokens .CachedTokens}}"><small>Cached</small><strong>{{fmtTokensShort .CachedTokens}}</strong></span>{{end}}
+        {{if .ReasoningTokens}}<span class="request-metric accent-purple" title="Reasoning tokens: {{fmtTokens .ReasoningTokens}}"><small>Reasoning</small><strong>{{fmtTokensShort .ReasoningTokens}}</strong></span>{{end}}
+        {{if .EstimatedTokens}}<span class="request-metric is-estimated" title="Usage was estimated because final upstream usage was unavailable"><small>Usage</small><strong>Estimated</strong></span>{{end}}
+        {{if .UpstreamTokensSaved}}<span class="request-metric accent-orange" title="Estimated tokens removed from the request before sending upstream. Engine: {{if .UpstreamOptimizerEngine}}{{.UpstreamOptimizerEngine}}{{else}}unknown{{end}}; optimized parts: {{.UpstreamOptimizedParts}}."><small>Upstream saved</small><strong>{{fmtTokensShort .UpstreamTokensSaved}}</strong></span>{{end}}
+        {{if .OptimizeDurationMS}}<span class="request-metric" title="Upstream payload optimization time"><small>Optimize</small><strong>{{.OptimizeDurationMS}}ms</strong></span>{{end}}
+        {{if .ProviderDurationMS}}<span class="request-metric" title="Provider attempt + response/stream handling time"><small>Provider</small><strong>{{.ProviderDurationMS}}ms</strong></span>{{end}}
+        {{if .DebugLogDurationMS}}<span class="request-metric" title="Debug payload build/compact time"><small>Debug log</small><strong>{{.DebugLogDurationMS}}ms</strong></span>{{end}}
+        {{if .EstimatedTokensSaved}}<span class="request-metric accent-green" title="Estimated tokens reduced only in stored debug/log payloads. This is separate from upstream provider optimization; it can appear even when Tool-result optimizer and RTK bridge are disabled."><small>Debug saved</small><strong>{{fmtTokensShort .EstimatedTokensSaved}}</strong></span>{{end}}
+      </div>
+      <div class="request-log-foot">
+        {{if .APIKeyMasked}}<span class="request-truncate" title="API key masked; searchable by ID, prefix, suffix, or masked value">key {{.APIKeyMasked}}</span>{{else if .APIKeyID}}<span class="request-truncate" title="API key ID">key {{.APIKeyID}}</span>{{end}}
+        {{if .RouterName}}<span class="pill pill-oauth" title="{{if eq .Endpoint "/internal/prompt-router/classifier"}}Classifier call{{else}}Router {{.RouterName}}{{end}} role {{.RouterRole}}{{if .RouterComplexity}} · complexity {{.RouterComplexity}}{{end}}{{if .RouterRisk}} · risk {{.RouterRisk}}{{end}} → {{.RouterTarget}}{{if .RouterClassifierModel}} · classifier {{.RouterClassifierModel}}{{end}}{{if .RouterConfidence}} · confidence {{printf "%.2f" .RouterConfidence}}{{end}}{{if .RouterReason}} · {{.RouterReason}}{{end}}">{{if eq .Endpoint "/internal/prompt-router/classifier"}}classifier{{else}}router {{.RouterName}}{{end}}{{if .RouterRole}} · {{.RouterRole}}{{end}}{{if .RouterComplexity}}/{{.RouterComplexity}}{{end}}{{if .RouterRisk}}/{{.RouterRisk}}{{end}}{{if .RouterTarget}} → {{.RouterTarget}}{{end}}{{if .RouterDurationMS}} · {{.RouterDurationMS}}ms{{end}}</span>{{end}}
+        {{if .RouterUsedFallback}}<span class="request-log-error request-truncate" title="Classifier fallback{{if .RouterTarget}} → {{.RouterTarget}}{{end}}{{if .RouterReason}} · {{.RouterReason}}{{end}}">fallback{{if .RouterTarget}} → {{.RouterTarget}}{{end}}</span>{{end}}
+        {{if .Error}}<span class="request-log-error request-truncate" title="{{.Error}}">{{.Error}}</span>{{end}}
+      </div>
+      {{if .Fusion}}
+      <details class="request-fusion-panel">
+        <summary>
+          <span class="pill pill-oauth">Fusion</span>
+          <strong>{{.FusionSuccessfulExperts}}/{{.FusionExpertCount}} {{if eq $root.Lang "vi"}}expert thành công{{else}}experts successful{{end}}</strong>
+          <small>{{.FusionMode}}{{if .FusionUsedReviewer}} · {{if eq $root.Lang "vi"}}có reviewer{{else}}reviewer used{{end}}{{end}}{{if .FusionDurationMS}} · {{.FusionDurationMS}}ms{{end}}</small>
+        </summary>
+        <div class="request-fusion-grid">
+          <div><small>{{if eq $root.Lang "vi"}}Synthesizer{{else}}Synthesizer{{end}}</small><code title="{{.FusionSynthesizerTarget}}">{{if .FusionSynthesizerTarget}}{{.FusionSynthesizerTarget}}{{else}}-{{end}}</code></div>
+          <div><small>{{if eq $root.Lang "vi"}}Reviewer{{else}}Reviewer{{end}}</small><code title="{{.FusionReviewerTarget}}">{{if .FusionReviewerTarget}}{{.FusionReviewerTarget}}{{else}}-{{end}}</code></div>
+          <div><small>{{if eq $root.Lang "vi"}}Trạng thái reviewer{{else}}Reviewer status{{end}}</small><strong>{{if .FusionUsedReviewer}}{{if eq $root.Lang "vi"}}Đã dùng{{else}}Used{{end}}{{else}}{{if eq $root.Lang "vi"}}Không dùng/fallback{{else}}Skipped/fallback{{end}}{{end}}</strong></div>
+        </div>
+        <div class="request-fusion-stages">
+          {{if .Fusion.Synthesizer}}
+          <article class="request-fusion-expert {{if .Fusion.Synthesizer.Success}}is-ok{{else}}is-error{{end}}">
+            <div class="request-fusion-expert-head"><strong>{{if eq $root.Lang "vi"}}Thư ký tổng hợp{{else}}Synthesizer stage{{end}}</strong><span class="request-status {{if .Fusion.Synthesizer.Success}}is-ok{{else}}is-error{{end}}">{{if .Fusion.Synthesizer.Success}}OK{{else}}ERR{{end}}</span></div>
+            <code title="{{.Fusion.Synthesizer.Target}}">{{.Fusion.Synthesizer.Target}}</code>
+            <div class="request-fusion-mini-metrics"><span>{{.Fusion.Synthesizer.DurationMS}}ms</span><span><b>In</b> {{fmtTokensShort .Fusion.Synthesizer.PromptTokens}}</span><span><b>Out</b> {{fmtTokensShort .Fusion.Synthesizer.OutputTokens}}</span></div>
+            {{if .Fusion.Synthesizer.Error}}<p class="request-log-error" title="{{.Fusion.Synthesizer.Error}}">{{.Fusion.Synthesizer.Error}}</p>{{else if .Fusion.Synthesizer.ContentPreview}}<p title="{{.Fusion.Synthesizer.ContentPreview}}">{{.Fusion.Synthesizer.ContentPreview}}</p>{{end}}
+          </article>
+          {{end}}
+          {{if .Fusion.Reviewer}}
+          <article class="request-fusion-expert {{if .Fusion.Reviewer.Success}}is-ok{{else}}is-error{{end}}">
+            <div class="request-fusion-expert-head"><strong>{{if eq $root.Lang "vi"}}Quản lý duyệt{{else}}Reviewer stage{{end}}</strong><span class="request-status {{if .Fusion.Reviewer.Success}}is-ok{{else}}is-error{{end}}">{{if .Fusion.Reviewer.Success}}OK{{else}}ERR{{end}}</span></div>
+            <code title="{{.Fusion.Reviewer.Target}}">{{.Fusion.Reviewer.Target}}</code>
+            <div class="request-fusion-mini-metrics"><span>{{.Fusion.Reviewer.DurationMS}}ms</span><span><b>In</b> {{fmtTokensShort .Fusion.Reviewer.PromptTokens}}</span><span><b>Out</b> {{fmtTokensShort .Fusion.Reviewer.OutputTokens}}</span></div>
+            {{if .Fusion.Reviewer.Error}}<p class="request-log-error" title="{{.Fusion.Reviewer.Error}}">{{.Fusion.Reviewer.Error}}</p>{{else if .Fusion.Reviewer.ContentPreview}}<p title="{{.Fusion.Reviewer.ContentPreview}}">{{.Fusion.Reviewer.ContentPreview}}</p>{{end}}
+          </article>
+          {{end}}
+        </div>
+        {{if .Fusion.Experts}}
+        <div class="request-fusion-experts">
+          {{range .Fusion.Experts}}
+          <article class="request-fusion-expert {{if .Success}}is-ok{{else}}is-error{{end}}">
+            <div class="request-fusion-expert-head">
+              <strong title="{{.Name}}">{{.Name}}</strong>
+              <span class="request-status {{if .Success}}is-ok{{else}}is-error{{end}}">{{if .Success}}OK{{else}}ERR{{end}}</span>
+            </div>
+            <code title="{{.Target}}">{{.Target}}</code>
+            {{if .Role}}<small title="{{.Role}}">{{.Role}}</small>{{end}}
+            <div class="request-fusion-mini-metrics">
+              <span title="{{.DurationMS}}ms">{{.DurationMS}}ms</span>
+              <span title="Input tokens"><b>In</b> {{fmtTokensShort .PromptTokens}}</span>
+              <span title="Output tokens"><b>Out</b> {{fmtTokensShort .OutputTokens}}</span>
+            </div>
+            {{if .Error}}<p class="request-log-error" title="{{.Error}}">{{.Error}}</p>{{else if .ContentPreview}}<p title="{{.ContentPreview}}">{{.ContentPreview}}</p>{{end}}
+          </article>
+          {{end}}
+        </div>
+        {{end}}
+        {{if .Fusion.SynthesisPreview}}
+        <details class="request-fusion-preview">
+          <summary>{{if eq $root.Lang "vi"}}Bản tổng hợp{{else}}Synthesis preview{{end}}</summary>
+          <pre>{{.Fusion.SynthesisPreview}}</pre>
+        </details>
+        {{end}}
+        {{if .Fusion.FinalPreview}}
+        <details class="request-fusion-preview">
+          <summary>{{if eq $root.Lang "vi"}}Kết quả cuối{{else}}Final preview{{end}}</summary>
+          <pre>{{.Fusion.FinalPreview}}</pre>
+        </details>
+        {{end}}
+      </details>
+      {{end}}
+      {{if .Debug}}
+      <div class="request-debug-panel is-collapsed">
+        <button type="button" class="btn-secondary request-debug-toggle js-request-debug-toggle">Debug payload {{if .Debug.Redacted}}· redacted{{end}}</button>
+        <div class="request-debug-body" hidden>
+          <div class="request-debug-summary">
+            {{if .Debug.RawPromptBytes}}<small>raw debug prompt {{fmtTokens .Debug.RawPromptBytes}} bytes{{if .Debug.RawPromptTruncated}} · truncated{{end}}</small>{{end}}
+            {{if .Debug.RawToolResultBytes}}<small>raw debug tool {{fmtTokens .Debug.RawToolResultBytes}} bytes{{if .Debug.RawToolTruncated}} · truncated{{end}}</small>{{end}}
+          {{if .UpstreamTokensSaved}}<small>upstream saved ~{{fmtTokens .UpstreamTokensSaved}} tokens{{if .UpstreamOptimizerEngine}} · optimizer {{.UpstreamOptimizerEngine}}{{end}}{{if .UpstreamOptimizedParts}} · {{.UpstreamOptimizedParts}} part(s){{end}}</small>{{end}}
+          {{if .Debug.CompactPromptApplied}}<small>debug prompt compact saved ~{{fmtTokens .Debug.EstimatedPromptTokensSaved}} tokens</small>{{end}}
+          {{if .Debug.CompactToolApplied}}<small>debug tool compact saved ~{{fmtTokens .Debug.EstimatedToolTokensSaved}} tokens</small>{{end}}
+        </div>
+        {{if .ID}}<button type="button" class="btn-secondary js-request-debug-load" data-request-id="{{.ID}}">View debug</button>{{else}}<span class="muted-text">Restart app to assign request ID before viewing raw</span>{{end}}
+        </div>
+      </div>
+      {{end}}
+    </article>
+  {{else}}
+    <article class="request-log-card empty-state">{{tr .T "requests.empty"}}</article>
+  {{end}}
+</div>
+<div class="request-pagination">
+  {{if .RequestHasPrev}}<a class="btn-secondary" href="/requests?limit={{.RequestLimit}}&page={{.RequestPrevPage}}">Previous</a>{{else}}<span class="btn-secondary is-disabled">Previous</span>{{end}}
+  <span class="muted-text">Page {{.RequestPage}} · {{.RequestShown}}/{{.RequestTotal}} rows</span>
+  {{if .RequestHasNext}}<a class="btn-secondary" href="/requests?limit={{.RequestLimit}}&page={{.RequestNextPage}}">Next</a>{{else}}<span class="btn-secondary is-disabled">Next</span>{{end}}
+</div>
+<div class="request-debug-modal" id="request-debug-modal" hidden>
+  <div class="request-debug-backdrop js-request-debug-close"></div>
+  <section class="request-debug-dialog" role="dialog" aria-modal="true" aria-labelledby="request-debug-title">
+    <div class="section-title-row compact">
+      <div>
+        <p class="eyebrow">Request debug</p>
+        <h2 id="request-debug-title">Debug payload</h2>
+        <p class="muted-text" id="request-debug-meta"></p>
+      </div>
+      <button type="button" class="btn-secondary js-request-debug-close">Close</button>
+    </div>
+    <div class="request-debug-tabs">
+      <button type="button" class="btn-secondary active" data-debug-tab="compact-prompt">Compact prompt</button>
+      <button type="button" class="btn-secondary" data-debug-tab="raw-prompt">Raw prompt</button>
+      <button type="button" class="btn-secondary" data-debug-tab="compact-tool">Compact tool result</button>
+      <button type="button" class="btn-secondary" data-debug-tab="raw-tool">Raw tool result</button>
+      <button type="button" class="btn-secondary js-request-debug-copy">Copy visible</button>
+    </div>
+    <pre id="request-debug-raw"></pre>
+  </section>
+</div>
+{{end}}

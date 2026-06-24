@@ -1,0 +1,75 @@
+{{template "layout_start" .}}
+<section class="providers-hero dashboard-hero-modern">
+  <div>
+    <p class="eyebrow">Fusion</p>
+    <h1>Fusion / Hợp Nhất</h1>
+    <p>{{if eq .Lang "vi"}}Tạo virtual model chạy nhiều chuyên gia, tổng hợp bằng thư ký rồi duyệt bằng quản lý để trả lời cuối.{{else}}Create virtual models that run multiple experts, synthesize their answers, then review the final response.{{end}}</p>
+  </div>
+  <div class="dashboard-status-pill">
+    <span>{{if eq .Lang "vi"}}Fusion{{else}}Fusion rules{{end}}</span>
+    <strong id="fusion-count">{{len .Settings.Fusions}}</strong>
+  </div>
+</section>
+
+<form method="post" class="settings-modern-grid fusion-page" id="fusion-form">
+  <textarea name="fusions" id="fusions-text" hidden>{{.FusionsText}}</textarea>
+
+  <section class="panel settings-card settings-card-wide fusion-editor-card">
+    <div class="section-title-row">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Trình tạo trực quan{{else}}Visual builder{{end}}</p>
+        <h2>{{if eq .Lang "vi"}}Tạo / sửa Fusion{{else}}Create / edit Fusion{{end}}</h2>
+        <p>{{if eq .Lang "vi"}}Không cần viết JSON. Điền thông tin, thêm chuyên gia, chọn model tổng hợp và model duyệt.{{else}}No JSON required. Fill the fields, add experts, choose synthesis and reviewer models.{{end}}</p>
+      </div>
+      <div class="inline-actions">
+        <button type="button" class="btn-secondary" id="fusion-reset-editor">{{if eq .Lang "vi"}}Tạo mới{{else}}New{{end}}</button>
+        <button type="button" id="fusion-save-editor">{{if eq .Lang "vi"}}Lưu Fusion vào danh sách{{else}}Save Fusion to list{{end}}</button>
+      </div>
+    </div>
+
+    <div class="provider-form-grid fusion-builder-grid">
+      <label>{{if eq .Lang "vi"}}Tên / model id{{else}}Name / model id{{end}}<input id="fusion-name-input" placeholder="fusion-code-review"></label>
+      <label>{{if eq .Lang "vi"}}Mô tả{{else}}Description{{end}}<input id="fusion-description-input" placeholder="{{if eq .Lang "vi"}}Mô tả tùy chọn{{else}}Optional description{{end}}"></label>
+      <label>{{if eq .Lang "vi"}}Chế độ{{else}}Mode{{end}}<select id="fusion-mode-input"><option value="parallel">{{if eq .Lang "vi"}}song song{{else}}parallel{{end}}</option><option value="sequential">{{if eq .Lang "vi"}}tuần tự{{else}}sequential{{end}}</option></select></label>
+      <label>Timeout ms<input id="fusion-timeout-input" type="number" min="1000" placeholder="120000"></label>
+      <label>{{if eq .Lang "vi"}}Số expert thành công tối thiểu{{else}}Min successful experts{{end}}<input id="fusion-min-success-input" type="number" min="0" placeholder="{{if eq .Lang "vi"}}0 = tất cả{{else}}0 = all{{end}}"></label>
+      <label>{{if eq .Lang "vi"}}Token output tối đa{{else}}Max output tokens{{end}}<input id="fusion-max-output-input" type="number" min="0" placeholder="{{if eq .Lang "vi"}}0 = mặc định provider{{else}}0 = provider default{{end}}"></label>
+      <label>{{if eq .Lang "vi"}}Model thư ký tổng hợp{{else}}Synthesizer target{{end}}<select id="fusion-synth-target-input" data-fusion-target-select><option value="">{{if eq .Lang "vi"}}Chọn model...{{else}}Select model...{{end}}</option>{{range .AvailableModels}}<option value="{{.Value}}">{{.Value}}</option>{{end}}{{range .Settings.Combos}}{{if .Enabled}}<option value="{{.Name}}">{{.Name}} · combo</option>{{end}}{{end}}{{range .Settings.PromptRouters}}{{if .Enabled}}<option value="{{.Name}}">{{.Name}} · router</option>{{end}}{{end}}</select></label>
+      <label>{{if eq .Lang "vi"}}Model quản lý duyệt{{else}}Reviewer target{{end}}<select id="fusion-reviewer-target-input" data-fusion-target-select><option value="">{{if eq .Lang "vi"}}Chọn model...{{else}}Select model...{{end}}</option>{{range .AvailableModels}}<option value="{{.Value}}">{{.Value}}</option>{{end}}{{range .Settings.Combos}}{{if .Enabled}}<option value="{{.Name}}">{{.Name}} · combo</option>{{end}}{{end}}{{range .Settings.PromptRouters}}{{if .Enabled}}<option value="{{.Name}}">{{.Name}} · router</option>{{end}}{{end}}</select></label>
+      <label class="checkbox fusion-toggle-card"><span><strong>{{if eq .Lang "vi"}}Bật Fusion{{else}}Enabled{{end}}</strong><small>{{if eq .Lang "vi"}}Cho phép dùng Fusion này như model ảo{{else}}Allow this Fusion as a virtual model{{end}}</small></span><input id="fusion-enabled-input" type="checkbox" checked></label>
+      <label class="checkbox fusion-toggle-card"><span><strong>{{if eq .Lang "vi"}}Dùng quản lý duyệt{{else}}Require reviewer{{end}}</strong><small>{{if eq .Lang "vi"}}Dùng model quản lý duyệt câu trả lời cuối{{else}}Use reviewer model for the final answer{{end}}</small></span><input id="fusion-require-reviewer-input" type="checkbox" checked></label>
+      <label class="wide">{{if eq .Lang "vi"}}Prompt thư ký tổng hợp{{else}}Synthesizer prompt template{{end}}<textarea id="fusion-synth-prompt-input" rows="4" placeholder="{{if eq .Lang "vi"}}Tùy chọn. Để trống sẽ dùng prompt mặc định.{{else}}Optional. Leave blank for default synthesizer prompt.{{end}}"></textarea></label>
+      <label class="wide">{{if eq .Lang "vi"}}Prompt quản lý duyệt{{else}}Reviewer prompt template{{end}}<textarea id="fusion-reviewer-prompt-input" rows="4" placeholder="{{if eq .Lang "vi"}}Tùy chọn. Để trống sẽ dùng prompt mặc định.{{else}}Optional. Leave blank for default reviewer prompt.{{end}}"></textarea></label>
+    </div>
+
+    <div class="fusion-expert-section">
+      <div class="section-title-row compact-title-row">
+        <div><h3>{{if eq .Lang "vi"}}Chuyên gia{{else}}Experts{{end}}</h3><p>{{if eq .Lang "vi"}}Mỗi expert sẽ gọi một target model/combo và phân tích độc lập.{{else}}Each expert calls a target model/combo and analyzes independently.{{end}}</p></div>
+        <button type="button" class="btn-secondary" id="fusion-add-expert">+ {{if eq .Lang "vi"}}Thêm expert{{else}}Add expert{{end}}</button>
+      </div>
+      <div id="fusion-expert-list" class="fusion-expert-list"></div>
+    </div>
+  </section>
+
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Fusion đã lưu{{else}}Saved Fusion{{end}}</p>
+        <h2>{{if eq .Lang "vi"}}Fusion hiện có{{else}}Current Fusion definitions{{end}}</h2>
+      </div>
+    </div>
+    <div class="pricing-rule-grid" id="fusion-card-grid"></div>
+  </section>
+
+  <details class="panel settings-card settings-card-wide fusion-json-details">
+    <summary>{{if eq .Lang "vi"}}Nâng cao: xem JSON sẽ lưu{{else}}Advanced: view generated JSON{{end}}</summary>
+    <pre id="fusion-json-preview"></pre>
+  </details>
+
+  <div class="settings-submit-bar">
+    <button type="submit">{{tr .T "common.save"}}</button>
+  </div>
+</form>
+
+<script src="/static/fusion.js?v=20260616-visual2"></script>
+{{template "layout_end" .}}

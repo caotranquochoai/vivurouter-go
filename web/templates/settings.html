@@ -1,0 +1,164 @@
+{{template "layout_start" .}}
+<section class="providers-hero dashboard-hero-modern">
+  <div>
+    <p class="eyebrow">{{if eq .Lang "vi"}}Bảng điều khiển{{else}}Control plane{{end}}</p>
+    <h1>{{tr .T "settings.title"}}</h1>
+    <p>{{tr .T "settings.desc"}}</p>
+  </div>
+</section>
+
+<form method="post" class="settings-modern-grid" id="settings-form">
+  <section class="panel settings-card">
+    <h2>{{if eq .Lang "vi"}}Cổng gateway{{else}}Gateway{{end}}</h2>
+    <div class="form-grid">
+      <label>{{if eq .Lang "vi"}}Provider mặc định{{else}}Default provider{{end}}
+        <select name="default_provider">
+          {{range .Providers}}<option value="{{.ID}}" {{if eq $.Settings.DefaultProvider .ID}}selected{{end}}>{{.ID}} ({{.Type}})</option>{{end}}
+        </select>
+      </label>
+      <label>{{if eq .Lang "vi"}}Codex provider mặc định{{else}}Default Codex provider{{end}}
+        <select name="default_codex_id">
+          {{range .Providers}}{{if eq .Type "codex"}}<option value="{{.ID}}" {{if eq $.Settings.DefaultCodexID .ID}}selected{{end}}>{{.ID}}</option>{{end}}{{end}}
+        </select>
+      </label>
+      <label>{{if eq .Lang "vi"}}Giữ nhật ký request (số dòng){{else}}Keep request logs (entries){{end}}<input name="keep_request_logs" type="number" min="1" value="{{.Settings.KeepRequestLogs}}"><small class="muted-text">{{if eq .Lang "vi"}}Ví dụ: 20,000 dòng gần nhất.{{else}}Example: latest 20,000 rows.{{end}}</small></label>
+      <label>{{if eq .Lang "vi"}}Debug tối đa/request (bytes){{else}}Max debug bytes/request{{end}}<input name="max_debug_payload_bytes" type="number" min="1024" max="524288" value="{{.Settings.MaxDebugPayloadBytes}}"><small class="muted-text">{{if eq .Lang "vi"}}524288 bytes = 512 KB.{{else}}524288 bytes = 512 KB.{{end}}</small></label>
+      <label class="checkbox wide checkbox-inline"><input name="observability_enabled" type="checkbox" {{if .Settings.ObservabilityEnabled}}checked{{end}}> <span>{{if eq .Lang "vi"}}Bật Observability{{else}}Enable Observability{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="save_raw_prompt" type="checkbox" {{if .Settings.SaveRawPrompt}}checked{{end}}> <span>{{if eq .Lang "vi"}}Lưu raw prompt/request body để debug{{else}}Save raw prompt/request body for debug{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="save_raw_tool_result" type="checkbox" {{if .Settings.SaveRawToolResult}}checked{{end}}> <span>{{if eq .Lang "vi"}}Lưu raw tool result để debug{{else}}Save raw tool results for debug{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="mask_debug_secrets" type="checkbox" {{if .Settings.MaskDebugSecrets}}checked{{end}}> <span>{{if eq .Lang "vi"}}Mask secret trước khi lưu debug payload{{else}}Mask secrets before saving debug payloads{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="compact_debug_payloads" type="checkbox" {{if .Settings.CompactDebugPayloads}}checked{{end}}> <span>{{if eq .Lang "vi"}}Compact debug/log payload khi lưu{{else}}Compact debug/log payloads when storing{{end}}</span></label>
+      <p class="wide provider-warning">{{if eq .Lang "vi"}}Raw prompt/tool result có thể chứa nội dung file, dữ liệu người dùng hoặc secret. Chỉ bật khi debug, nên giữ masking và giới hạn dung lượng. API key trong nhật ký chỉ lưu dạng masked để vẫn lọc được key đang dùng.{{else}}Raw prompt/tool results may contain file contents, user data, or secrets. Enable only while debugging, keep masking on, and keep a size limit. API keys in logs are stored masked but still searchable.{{end}}</p>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Ghi chi tiết request để xem lại trong trang nhật ký. Khi tắt, gateway vẫn chạy và quota API key vẫn được cập nhật nhưng không ghi lịch sử request mới.{{else}}Record request details for inspection in the logs view. When disabled, the gateway still runs and API key quota is still updated, but new request history is not stored.{{end}}</p>
+      <label>{{if eq .Lang "vi"}}API key cục bộ{{else}}Local API key{{end}}<span class="copy-input-row"><input name="local_api_key" value="{{.Settings.LocalAPIKey}}" type="password"><button type="button" class="btn-secondary js-copy-field">{{tr .T "common.copy"}}</button><button type="button" class="btn-secondary js-regenerate-local-key">{{if eq .Lang "vi"}}Tạo lại{{else}}Regenerate{{end}}</button></span></label>
+      <label class="wide dashboard-message-field">{{if eq .Lang "vi"}}Thông báo dashboard{{else}}Dashboard message{{end}}<textarea name="dashboard_message">{{.Settings.DashboardMessage}}</textarea></label>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Chính sách API key:{{else}}API key policies:{{end}} <a href="/api-keys">API Keys</a>.</p>
+    </div>
+  </section>
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">Prompt Router</p><h2>{{if eq .Lang "vi"}}Prompt classifier{{else}}Prompt classifier{{end}}</h2><p>{{if eq .Lang "vi"}}Chọn lượng dữ liệu gửi cho model điều phối khi phân loại prompt.{{else}}Choose how much request data is sent to the routing classifier.{{end}}</p></div>
+    </div>
+    <div class="form-grid">
+      <label class="wide">{{if eq .Lang "vi"}}Chế độ nén prompt điều phối{{else}}Router prompt compression mode{{end}}
+        <select name="prompt_router_compression_mode">
+          <option value="preview" {{if eq .Settings.PromptRouterCompressionMode "preview"}}selected{{end}}>{{if eq .Lang "vi"}}Nén mạnh / preview hiện tại{{else}}Strong preview compression{{end}}</option>
+          <option value="full" {{if eq .Settings.PromptRouterCompressionMode "full"}}selected{{end}}>{{if eq .Lang "vi"}}Gửi toàn bộ request raw{{else}}Full raw request{{end}}</option>
+          <option value="per-type" {{if eq .Settings.PromptRouterCompressionMode "per-type"}}selected{{end}}>{{if eq .Lang "vi"}}Tùy chọn từng loại dữ liệu{{else}}Per-type controls{{end}}</option>
+        </select>
+      </label>
+      <p class="wide provider-warning">{{if eq .Lang "vi"}}Full raw chính xác hơn nhưng tốn token và gửi nhiều dữ liệu hơn vào classifier. Preview tiết kiệm nhất nhưng có thể mất ngữ cảnh quan trọng. Per-type cho phép giữ nguyên phần cần thiết.{{else}}Full raw is more complete but costs more tokens and sends more data to the classifier. Preview is cheapest but can drop important context. Per-type lets you preserve selected parts.{{end}}</p>
+      <label class="checkbox wide checkbox-inline"><input name="prompt_router_compress_system" type="checkbox" {{if .Settings.PromptRouterCompressSystem}}checked{{end}}> <span>{{if eq .Lang "vi"}}Per-type: nén system prompt{{else}}Per-type: compress system prompt{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="prompt_router_compress_developer" type="checkbox" {{if .Settings.PromptRouterCompressDeveloper}}checked{{end}}> <span>{{if eq .Lang "vi"}}Per-type: nén developer prompt/message{{else}}Per-type: compress developer prompt/message{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="prompt_router_compress_messages" type="checkbox" {{if .Settings.PromptRouterCompressMessages}}checked{{end}}> <span>{{if eq .Lang "vi"}}Per-type: nén lịch sử/text messages{{else}}Per-type: compress message history/text{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="prompt_router_compress_tool_results" type="checkbox" {{if .Settings.PromptRouterCompressToolResults}}checked{{end}}> <span>{{if eq .Lang "vi"}}Per-type: nén tool/function results{{else}}Per-type: compress tool/function results{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="prompt_router_compress_tool_schemas" type="checkbox" {{if .Settings.PromptRouterCompressToolSchemas}}checked{{end}}> <span>{{if eq .Lang "vi"}}Per-type: nén tool schemas{{else}}Per-type: compress tool schemas{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="prompt_router_compress_images" type="checkbox" {{if .Settings.PromptRouterCompressImages}}checked{{end}}> <span>{{if eq .Lang "vi"}}Per-type: nén image/input_image blocks{{else}}Per-type: compress image/input_image blocks{{end}}</span></label>
+    </div>
+  </section>
+
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">RTK / Token optimization</p><h2>{{if eq .Lang "vi"}}Tối ưu token{{else}}Token optimization{{end}}</h2><p>{{if eq .Lang "vi"}}Giảm dung lượng tool result lớn trước khi gửi lên provider. RTK binary là tùy chọn; native optimizer vẫn chạy trong gateway.{{else}}Reduce large tool-result payloads before sending them upstream. The RTK binary is optional; the native optimizer runs inside the gateway.{{end}}</p></div>
+    </div>
+    <div class="form-grid">
+      <label class="checkbox wide checkbox-inline"><input name="token_optimize_tool_results" type="checkbox" {{if .Settings.TokenOptimizeToolResults}}checked{{end}}> <span>{{if eq .Lang "vi"}}Bật tối ưu tool result cho /v1/messages{{else}}Enable tool-result optimization for /v1/messages{{end}}</span></label>
+      <p class="wide provider-warning">{{if eq .Lang "vi"}}Mặc định VivuRouter chỉ tối ưu <code>tool_result</code>. Các lựa chọn can thiệp sâu bên dưới có thể làm thay đổi chỉ dẫn hệ thống, mô tả tool hoặc input tool-call, khiến provider từ chối request, tool gọi sai tham số, model mất guardrail hoặc câu trả lời lệch ý định. Chỉ bật khi bạn hiểu rõ rủi ro và có thể rollback.{{else}}By default VivuRouter only optimizes <code>tool_result</code>. The advanced mutation options below can alter system instructions, tool descriptions, or tool-call inputs; providers may reject requests, tools may receive wrong arguments, model guardrails may be weakened, or answers may drift. Enable only if you understand the risk and can roll back.{{end}}</p>
+      <div class="wide provider-usage-filter"><button type="button" class="btn-secondary js-token-preset" data-token-preset="safe">Safe</button><button type="button" class="btn-secondary js-token-preset" data-token-preset="balanced">Balanced</button><button type="button" class="btn-secondary js-token-preset" data-token-preset="aggressive">Aggressive</button><button type="button" class="btn-secondary js-token-preset" data-token-preset="debug">Debug</button></div>
+      <label class="checkbox wide checkbox-inline"><input name="token_optimize_system" type="checkbox" {{if .Settings.TokenOptimizeSystem}}checked{{end}}> <span>{{if eq .Lang "vi"}}Nâng cao: cho phép tối ưu system prompt{{else}}Advanced: allow system prompt optimization{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="token_optimize_developer" type="checkbox" {{if .Settings.TokenOptimizeDeveloper}}checked{{end}}> <span>{{if eq .Lang "vi"}}Nâng cao: cho phép tối ưu developer prompt/message{{else}}Advanced: allow developer prompt/message optimization{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="token_optimize_text" type="checkbox" {{if .Settings.TokenOptimizeText}}checked{{end}}> <span>{{if eq .Lang "vi"}}Nâng cao: cho phép tối ưu text thường trong messages{{else}}Advanced: allow normal message text optimization{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="token_optimize_tool_schemas" type="checkbox" {{if .Settings.TokenOptimizeToolSchemas}}checked{{end}}> <span>{{if eq .Lang "vi"}}Nâng cao: cho phép tối ưu tool schema/description{{else}}Advanced: allow tool schema/description optimization{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="token_optimize_tool_calls" type="checkbox" {{if .Settings.TokenOptimizeToolCalls}}checked{{end}}> <span>{{if eq .Lang "vi"}}Nâng cao: cho phép tối ưu tool call arguments/input{{else}}Advanced: allow tool-call arguments/input optimization{{end}}</span></label>
+      <label>{{if eq .Lang "vi"}}Ngưỡng tối thiểu compact (chars){{else}}Minimum compact threshold (chars){{end}}<input name="token_optimize_min_chars" type="number" min="1000" value="{{.Settings.TokenOptimizeMinChars}}"></label>
+      <label>{{if eq .Lang "vi"}}Kích thước mục tiêu sau compact (chars){{else}}Target compact size (chars){{end}}<input name="token_optimize_max_chars" type="number" min="2000" max="131072" value="{{.Settings.TokenOptimizeMaxChars}}"></label>
+      <label class="checkbox wide checkbox-inline"><input name="rtk_enabled" type="checkbox" {{if .Settings.RTKEnabled}}checked{{end}}> <span>{{if eq .Lang "vi"}}Bật RTK binary bridge khi có binary phù hợp{{else}}Enable RTK binary bridge when a native binary is available{{end}}</span></label>
+      <label class="wide">RTK path <input name="rtk_path" value="{{.Settings.RTKPath}}" placeholder="{{if eq .Lang "vi"}}Để trống để tự tìm rtk.exe/rtk cạnh app hoặc trong PATH{{else}}Leave blank to auto-detect rtk.exe/rtk next to the app or in PATH{{end}}"></label>
+      <p class="wide provider-warning">{{if eq .Lang "vi"}}Windows dùng <code>rtk.exe</code>; Linux/macOS cần binary native tên <code>rtk</code>. File <code>rtk.exe</code> không chạy trực tiếp trên Linux. Tính năng này mặc định tắt để tránh thay đổi payload ngoài ý muốn.{{else}}Windows uses <code>rtk.exe</code>; Linux/macOS need a native <code>rtk</code> binary. <code>rtk.exe</code> does not run directly on Linux. This feature is off by default to avoid unexpected payload changes.{{end}}</p>
+      <div class="wide rtk-status-card" id="rtk-status-card" data-auto-check="{{if .Settings.RTKEnabled}}1{{else}}0{{end}}">
+        <div>
+          <strong>{{if eq .Lang "vi"}}Trạng thái RTK{{else}}RTK status{{end}}</strong>
+          <p class="muted-text" id="rtk-status-summary">{{if eq .Lang "vi"}}Bấm kiểm tra để xác minh binary RTK hiện tại.{{else}}Check the current RTK binary detection and version.{{end}}</p>
+        </div>
+        <button type="button" class="btn-secondary js-check-rtk">{{if eq .Lang "vi"}}Kiểm tra RTK{{else}}Check RTK{{end}}</button>
+        <dl class="rtk-status-grid" id="rtk-status-details" hidden></dl>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">{{if eq .Lang "vi"}}Bảo mật quản trị{{else}}Admin security{{end}}</p><h2>{{if eq .Lang "vi"}}Bảo mật quản trị{{else}}Admin security{{end}}</h2><p>{{if eq .Lang "vi"}}Bảo vệ giao diện quản lý bằng passcode cục bộ.{{else}}Protect the management UI with a local passcode.{{end}}</p></div>
+      {{if .Settings.AdminSecurityEnabled}}<a class="btn-secondary" href="/admin/logout">{{if eq .Lang "vi"}}Đăng xuất{{else}}Logout{{end}}</a>{{end}}
+    </div>
+    <div class="form-grid">
+      <label class="checkbox wide checkbox-inline"><input name="admin_security_enabled" type="checkbox" {{if .Settings.AdminSecurityEnabled}}checked{{end}}> <span>{{if eq .Lang "vi"}}Bật passcode quản trị{{else}}Enable admin passcode{{end}}</span></label>
+      <label>{{if eq .Lang "vi"}}Passcode mới{{else}}New passcode{{end}}<input name="admin_passcode" type="password" placeholder="{{if eq .Lang "vi"}}Để trống để giữ passcode hiện tại{{else}}Leave blank to keep current passcode{{end}}"></label>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Nếu bật, hãy đặt passcode trước khi lưu. Passcode được lưu cục bộ trong DB mẫu.{{else}}If enabled, set a passcode before saving. The passcode is stored locally in the sample DB.{{end}}</p>
+    </div>
+  </section>
+
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">{{if eq .Lang "vi"}}An toàn dữ liệu{{else}}Data safety{{end}}</p><h2>{{if eq .Lang "vi"}}Sao lưu & khôi phục DB{{else}}Backup & Restore DB{{end}}</h2><p>{{if eq .Lang "vi"}}Tải bản sao lưu DB hiện tại hoặc khôi phục từ file backup.{{else}}Download the current DB file or restore from a backup file.{{end}}</p></div>
+      <a class="btn-secondary" href="/api/admin/backup">{{if eq .Lang "vi"}}Tải backup{{else}}Download backup{{end}}</a>
+    </div>
+    <div class="form-grid">
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Backup sẽ tải file store đang dùng:{{else}}Backup downloads the active store file:{{end}} <code>sample-db.json</code> {{if eq .Lang "vi"}}hoặc{{else}}or{{end}} <code>sample.sqlite</code>.</p>
+    </div>
+  </section>
+  <section class="panel settings-card settings-card-wide">
+    <h2>{{if eq .Lang "vi"}}Khôi phục DB{{else}}Restore DB{{end}}</h2>
+    <div class="form-grid">
+      <label class="wide">{{if eq .Lang "vi"}}File backup{{else}}Backup file{{end}}<input name="db_file" type="file" form="restore-db-form" required></label>
+      <p class="wide provider-warning provider-warning-danger">{{if eq .Lang "vi"}}Restore sẽ ghi đè DB hiện tại và tạo backup an toàn trước. Nhập RESTORE để xác nhận, sau đó restart server.{{else}}Restore overwrites the current DB and creates a safety backup first. Type RESTORE to confirm, then restart the server.{{end}}</p>
+      <label class="wide">{{if eq .Lang "vi"}}Nhập RESTORE để xác nhận{{else}}Type RESTORE to confirm{{end}}<input id="restore-confirm-input" autocomplete="off" placeholder="RESTORE"></label>
+      <div class="form-actions wide"><button type="submit" class="btn-danger" form="restore-db-form" id="restore-db-submit" disabled>{{if eq .Lang "vi"}}Khôi phục DB{{else}}Restore DB{{end}}</button></div>
+    </div>
+  </section>
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">{{if eq .Lang "vi"}}Dọn dẹp nhật ký{{else}}Log cleanup{{end}}</p><h2>{{if eq .Lang "vi"}}Xóa raw debug payload{{else}}Clear raw debug payloads{{end}}</h2><p>{{if eq .Lang "vi"}}Xóa raw prompt/tool result đã lưu để giảm dung lượng và rủi ro dữ liệu nhạy cảm. Metadata nhật ký request vẫn được giữ lại.{{else}}Delete saved raw prompt/tool result payloads to reduce storage and sensitive-data exposure. Request metadata remains available.{{end}}</p></div>
+    </div>
+    <div class="form-grid">
+      <p class="wide provider-warning">{{if eq .Lang "vi"}}Hành động này chỉ xóa phần raw debug đã lưu trong <code>debug-payloads</code> hoặc bảng debug SQLite; không xóa request logs, token, cost hay API key masked.{{else}}This only deletes saved raw debug payloads from <code>debug-payloads</code> or the SQLite debug table; it does not delete request logs, tokens, cost, or masked API keys.{{end}}</p>
+      <div class="form-actions wide"><button type="button" class="btn-danger js-clear-request-debug">{{if eq .Lang "vi"}}Dọn raw debug payload{{else}}Clear raw debug payloads{{end}}</button><span class="muted-text" id="clear-debug-result" aria-live="polite"></span></div>
+    </div>
+  </section>
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">{{if eq .Lang "vi"}}Vùng nguy hiểm{{else}}Danger zone{{end}}</p><h2>{{if eq .Lang "vi"}}Đặt lại dữ liệu{{else}}Reset data{{end}}</h2><p>{{if eq .Lang "vi"}}Xóa sạch toàn bộ dữ liệu trong DB và làm mới về trạng thái mặc định.{{else}}Delete all data in the DB and recreate the default state.{{end}}</p></div>
+    </div>
+    <div class="form-grid">
+      <p class="wide provider-warning provider-warning-danger">{{if eq .Lang "vi"}}Hành động này sẽ xóa toàn bộ settings, provider, API key, pricing, combo, request logs, debug payload và chi phí đã ghi nhận. Không thể hoàn tác. Nhập chính xác DELETE để xác nhận.{{else}}This deletes all settings, providers, API keys, pricing, combos, request logs, debug payloads, and recorded cost data. It cannot be undone. Type DELETE exactly to confirm.{{end}}</p>
+      <label class="wide">{{if eq .Lang "vi"}}Nhập DELETE để xóa dữ liệu{{else}}Type DELETE to reset data{{end}}<input name="confirm" form="reset-data-form" autocomplete="off" placeholder="DELETE" required></label>
+      <div class="form-actions wide"><button type="submit" class="btn-danger" form="reset-data-form">{{if eq .Lang "vi"}}Đặt lại dữ liệu{{else}}Reset data{{end}}</button></div>
+    </div>
+  </section>
+  <section class="panel settings-card settings-card-wide" id="budget">
+    <div class="section-title-row">
+      <div><p class="eyebrow">{{tr .T "budget.eyebrow"}}</p><h2>{{tr .T "budget.settings_title"}}</h2><p>{{tr .T "budget.settings_desc"}}</p></div>
+    </div>
+    <div class="form-grid">
+      <label>{{tr .T "budget.daily_budget"}}<input name="daily_budget_usd" type="number" step="0.01" min="0" value="{{if gt .Settings.DailyBudgetUSD 0.0}}{{printf "%.2f" .Settings.DailyBudgetUSD}}{{end}}" placeholder="0 = {{tr .T "budget.unlimited"}}"></label>
+      <label>{{tr .T "budget.monthly_budget"}}<input name="monthly_budget_usd" type="number" step="0.01" min="0" value="{{if gt .Settings.MonthlyBudgetUSD 0.0}}{{printf "%.2f" .Settings.MonthlyBudgetUSD}}{{end}}" placeholder="0 = {{tr .T "budget.unlimited"}}"></label>
+      <label>{{tr .T "budget.alert_pct"}}<input name="budget_alert_pct" type="number" min="1" max="100" value="{{.Settings.BudgetAlertPct}}"></label>
+      <p class="wide muted-text">{{tr .T "budget.settings_hint"}}</p>
+    </div>
+  </section>
+
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">{{if eq .Lang "vi"}}Kinh tế model{{else}}Model economics{{end}}</p><h2>{{tr .T "pricing.title"}}</h2><p>{{tr .T "pricing.desc"}}</p></div>
+      <a class="btn-secondary" href="/pricing">{{tr .T "nav.pricing"}}</a>
+    </div>
+  </section>
+
+  <div class="settings-submit-bar">
+    <button type="submit">{{tr .T "common.save"}}</button>
+  </div>
+</form>
+<form id="restore-db-form" method="post" action="/api/admin/restore" enctype="multipart/form-data"></form>
+<form id="reset-data-form" method="post" action="/api/admin/reset-data"></form>
+
+{{template "layout_end" .}}
