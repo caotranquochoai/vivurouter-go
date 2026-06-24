@@ -1,0 +1,164 @@
+{{template "layout_start" .}}
+<section class="dashboard-hero-modern combo-hero">
+  <div>
+    <p class="eyebrow">{{if eq .Lang "vi"}}Điều phối model{{else}}Model orchestration{{end}}</p>
+    <h1>{{tr .T "combos.title"}}</h1>
+    <p>{{tr .T "combos.desc"}}</p>
+  </div>
+  <div class="combo-hero-stats">
+    <span>{{tr .T "combos.saved"}}</span>
+    <strong>{{len .Settings.Combos}}</strong>
+    <small>{{if eq .Lang "vi"}}combo đang lưu{{else}}saved combos{{end}}</small>
+  </div>
+</section>
+
+<form method="post" class="combo-page" id="combo-builder-form">
+  <textarea name="combos" id="combos-text" hidden>{{.CombosText}}</textarea>
+
+  <section class="panel combo-builder-shell">
+    <div class="section-title-row combo-title-row">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Trình tạo combo{{else}}Combo builder{{end}}</p>
+        <h2>{{if eq .Lang "vi"}}Tạo model ảo bằng cách chọn model thật{{else}}Build virtual models from saved models{{end}}</h2>
+        <p>{{if eq .Lang "vi"}}Đặt tên combo, chọn strategy, rồi bấm model từ danh sách provider bên dưới. Combo sẽ xuất hiện như một model trong /v1/models.{{else}}Name the combo, choose a strategy, then click models from saved providers. The combo is exposed as a virtual model in /v1/models.{{end}}</p>
+      </div>
+      <button type="submit">{{tr .T "common.save"}}</button>
+    </div>
+
+    <div class="combo-workbench">
+      <div class="combo-form-card">
+        <div class="combo-card-heading">
+          <span class="combo-step">1</span>
+          <div>
+            <h3>{{if eq .Lang "vi"}}Thông tin combo{{else}}Combo details{{end}}</h3>
+            <p>{{if eq .Lang "vi"}}Tên combo nên ngắn gọn, không trùng model/provider thật.{{else}}Use a short virtual model name that does not collide with real providers/models.{{end}}</p>
+          </div>
+        </div>
+        <div class="combo-field-stack">
+          <div class="combo-field-row combo-field-row-primary">
+            <label>{{if eq .Lang "vi"}}Tên combo{{else}}Combo name{{end}}
+              <input id="combo-name-input" type="text" placeholder="fast-combo">
+              <small>{{if eq .Lang "vi"}}Tên model ảo client sẽ gọi.{{else}}Virtual model name clients will call.{{end}}</small>
+            </label>
+            <label>{{if eq .Lang "vi"}}Mô tả{{else}}Description{{end}}
+              <input id="combo-description-input" type="text" placeholder="{{if eq .Lang "vi"}}Combo fallback nhanh{{else}}Fast fallback combo{{end}}">
+              <small>{{if eq .Lang "vi"}}Ghi chú ngắn để nhận biết mục đích combo.{{else}}Short note to identify the combo purpose.{{end}}</small>
+            </label>
+          </div>
+          <div class="combo-field-row combo-field-row-routing">
+            <label>{{if eq .Lang "vi"}}Chiến lược{{else}}Strategy{{end}}
+              <select id="combo-strategy-input">
+                <option value="fallback">fallback</option>
+                <option value="round-robin">round-robin</option>
+              </select>
+              <small>{{if eq .Lang "vi"}}Fallback theo thứ tự hoặc xoay vòng.{{else}}Fallback order or round-robin rotation.{{end}}</small>
+            </label>
+            <label>{{if eq .Lang "vi"}}Giới hạn sticky{{else}}Sticky limit{{end}}
+              <input id="combo-sticky-input" type="number" min="1" value="1">
+              <small>{{if eq .Lang "vi"}}Số request giữ cùng model khi round-robin.{{else}}Requests kept on the same model in round-robin.{{end}}</small>
+            </label>
+            <label>{{if eq .Lang "vi"}}Context window{{else}}Context window{{end}}
+              <input id="combo-context-input" type="number" min="0" placeholder="auto">
+              <small>{{if eq .Lang "vi"}}0 hoặc trống = tự động.{{else}}0 or blank = auto.{{end}}</small>
+            </label>
+          </div>
+          <label class="combo-toggle-card">
+            <span>
+              <strong>{{if eq .Lang "vi"}}Đang bật{{else}}Enabled{{end}}</strong>
+              <small>{{if eq .Lang "vi"}}Bật để combo xuất hiện trong /v1/models và dùng được khi route request.{{else}}Expose this combo in /v1/models and allow routing requests to it.{{end}}</small>
+            </span>
+            <input id="combo-enabled-input" type="checkbox" checked>
+          </label>
+        </div>
+      </div>
+
+      <div class="combo-selected-card">
+        <div class="combo-card-heading compact">
+          <span class="combo-step">2</span>
+          <div>
+            <h3>{{if eq .Lang "vi"}}Model đã chọn{{else}}Selected models{{end}}</h3>
+            <p>{{if eq .Lang "vi"}}Thứ tự model là thứ tự fallback/round-robin ban đầu.{{else}}Order matters for fallback and round-robin starting order.{{end}}</p>
+          </div>
+        </div>
+        <div class="combo-selected-list" id="combo-selected-list">
+          <div class="combo-selected-empty-card">
+            <span class="combo-empty-icon">🧩</span>
+            <strong>{{if eq .Lang "vi"}}Chưa chọn model nào{{else}}No model selected yet{{end}}</strong>
+            <p>{{if eq .Lang "vi"}}Bấm vào một model ở danh sách provider bên dưới để thêm vào combo. Thứ tự chọn sẽ là thứ tự fallback/round-robin ban đầu.{{else}}Click a provider model below to add it to the combo. Selection order becomes the initial fallback/round-robin order.{{end}}</p>
+          </div>
+        </div>
+        <div class="combo-actions-row">
+          <button type="button" class="btn-secondary" id="combo-clear-selection">{{if eq .Lang "vi"}}Xóa chọn{{else}}Clear{{end}}</button>
+          <button type="button" class="btn-secondary" id="combo-reset-editor">{{if eq .Lang "vi"}}Tạo mới{{else}}New{{end}}</button>
+          <button type="button" id="combo-add-button">{{if eq .Lang "vi"}}Thêm / cập nhật{{else}}Add / update{{end}}</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel combo-picker-shell">
+    <div class="section-title-row combo-title-row">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Nguồn model{{else}}Model source{{end}}</p>
+        <h2>{{if eq .Lang "vi"}}Chọn model từ provider đã lưu{{else}}Choose models from saved providers{{end}}</h2>
+        <p>{{if eq .Lang "vi"}}Danh sách lấy từ provider đang enabled. Nếu trống, vào Providers để fetch hoặc nhập model trước.{{else}}The picker uses enabled providers with saved models. If empty, fetch or enter provider models first.{{end}}</p>
+      </div>
+      <input class="combo-model-search" type="search" id="combo-model-filter" placeholder="{{if eq .Lang "vi"}}Lọc model...{{else}}Filter models...{{end}}">
+    </div>
+    <div class="combo-model-picker" id="combo-model-picker">
+      {{range .AvailableModels}}
+      <button type="button" class="combo-model-option" data-combo-model="{{.Value}}" data-combo-provider="{{.ProviderID}}">
+        <span>{{.Provider}}</span>
+        <strong>{{.Model}}</strong>
+        <small>{{.Value}}</small>
+      </button>
+      {{else}}
+      <article class="combo-empty-state"><h3>{{if eq $.Lang "vi"}}Chưa có model để chọn{{else}}No selectable models{{end}}</h3><p>{{if eq $.Lang "vi"}}Hãy cấu hình provider và lưu danh sách model trước.{{else}}Configure providers and save their model lists first.{{end}}</p></article>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="panel combo-saved-shell">
+    <div class="section-title-row combo-title-row">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Combo đã lưu{{else}}Saved combos{{end}}</p>
+        <h2>{{tr .T "combos.saved"}} <span class="pill">{{len .Settings.Combos}}</span></h2>
+        <p>{{if eq .Lang "vi"}}Quản lý combo đã lưu, chỉnh thứ tự model, bật/tắt hoặc xóa combo không còn dùng.{{else}}Manage saved combos, adjust model order, enable/disable, or remove unused combos.{{end}}</p>
+      </div>
+    </div>
+    <div class="combo-card-grid" id="combo-card-grid">
+      {{range .Settings.Combos}}
+      <article class="combo-card" data-combo-card>
+        <input type="hidden" data-combo-field="name" value="{{.Name}}">
+        <input type="hidden" data-combo-field="models" value="{{range $idx, $model := .Models}}{{if $idx}},{{end}}{{$model}}{{end}}">
+        <input type="hidden" data-combo-field="strategy" value="{{.Strategy}}">
+        <input type="hidden" data-combo-field="sticky" value="{{.StickyLimit}}">
+        <input type="hidden" data-combo-field="context" value="{{.ContextLength}}">
+        <input type="hidden" data-combo-field="enabled" value="{{.Enabled}}">
+        <input type="hidden" data-combo-field="description" value="{{.Description}}">
+        <div class="combo-card-head">
+          <div>
+            <span class="combo-strategy-badge">{{.Strategy}}</span>
+            <h3>{{.Name}}</h3>
+          </div>
+          <div class="combo-card-actions">
+            <span class="combo-status {{if not .Enabled}}is-disabled{{end}}">{{if .Enabled}}{{if eq $.Lang "vi"}}đang bật{{else}}enabled{{end}}{{else}}{{if eq $.Lang "vi"}}đang tắt{{else}}disabled{{end}}{{end}}</span>
+            <button type="button" class="btn-secondary js-edit-combo">{{if eq $.Lang "vi"}}Sửa{{else}}Edit{{end}}</button>
+            <button type="button" class="btn-secondary js-remove-combo">{{if eq $.Lang "vi"}}Xóa{{else}}Delete{{end}}</button>
+          </div>
+        </div>
+        <div class="combo-metrics-row">
+          <span><small>{{if eq $.Lang "vi"}}Model{{else}}Models{{end}}</small><strong>{{len .Models}}</strong></span>
+          <span><small>{{if eq $.Lang "vi"}}Sticky{{else}}Sticky{{end}}</small><strong>{{.StickyLimit}}</strong></span>
+          <span><small>{{if eq $.Lang "vi"}}Context{{else}}Context{{end}}</small><strong>{{if .ContextLength}}{{.ContextLength}}{{else}}auto{{end}}</strong></span>
+        </div>
+        <div class="combo-model-chip-row">{{range .Models}}<code title="{{.}}">{{.}}</code>{{end}}</div>
+        {{if .Description}}<p class="combo-card-desc">{{.Description}}</p>{{end}}
+      </article>
+      {{else}}
+      <article class="combo-empty-state" id="combo-empty-state"><h3>{{tr .T "combos.empty"}}</h3><p>{{tr .T "combos.desc"}}</p></article>
+      {{end}}
+    </div>
+  </section>
+</form>
+{{template "layout_end" .}}

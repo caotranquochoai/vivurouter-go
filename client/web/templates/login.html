@@ -1,0 +1,26 @@
+{{define "login.html"}}
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} · {{tr .T "app.name"}}</title>
+  <link rel="stylesheet" href="/static/app.css?v=20260611">
+  <link rel="stylesheet" href="/static/provider-actions.css?v=20260611">
+</head>
+<body>
+<main class="container">
+  <section class="panel settings-card admin-login-card">
+    <p class="eyebrow">Admin security</p>
+    <h1>{{tr .T "login.title"}}</h1>
+    <p class="muted-text">{{tr .T "login.subtitle"}}</p>
+    {{if .Error}}<div class="provider-warning provider-warning-danger">{{.Error}}</div>{{end}}
+    <form method="post" class="form-grid">
+      <label class="wide">{{tr .T "login.passcode"}}<input name="passcode" type="password" autofocus required></label>
+      <div class="form-actions wide"><button type="submit">{{tr .T "login.submit"}}</button></div>
+    </form>
+  </section>
+</main>
+</body>
+</html>
+{{end}}

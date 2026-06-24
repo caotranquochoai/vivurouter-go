@@ -1,0 +1,94 @@
+{{template "layout_start" .}}
+<section class="providers-hero provider-catalog-hero">
+  <div>
+    <p class="eyebrow">{{if eq .Lang "vi"}}Proxy Pool{{else}}Proxy Pool{{end}}</p>
+    <h1>{{if eq .Lang "vi"}}Quản lý proxy{{else}}Proxy Management{{end}}</h1>
+    <p>{{if eq .Lang "vi"}}Thêm nhiều proxy một lần, quản lý tập trung và gắn proxy cho từng provider.{{else}}Add proxies in bulk, manage them centrally, and assign them to providers.{{end}}</p>
+  </div>
+  <div class="provider-summary-grid provider-summary-compact">
+    <article><span>{{if eq .Lang "vi"}}Tổng proxy{{else}}Total proxies{{end}}</span><strong>{{.ProxySummary.Total}}</strong></article>
+    <article><span>{{if eq .Lang "vi"}}Đang bật{{else}}Enabled{{end}}</span><strong>{{.ProxySummary.Enabled}}</strong></article>
+    <article><span>{{if eq .Lang "vi"}}Đang tắt{{else}}Disabled{{end}}</span><strong>{{.ProxySummary.Disabled}}</strong></article>
+    <article><span>{{if eq .Lang "vi"}}Provider{{else}}Providers{{end}}</span><strong>{{.ProviderSummary.Total}}</strong></article>
+  </div>
+</section>
+
+<section class="provider-catalog-toolbar">
+  <div class="provider-search-wrap"><span>⌕</span><input type="search" id="proxy-search" placeholder="{{if eq .Lang "vi"}}Tìm proxy theo tên, ID, host...{{else}}Search proxies by name, ID, host...{{end}}"></div>
+  <div class="provider-add-menu">
+    <button type="button" class="provider-add-btn provider-add-wide" data-open-modal="proxy-modal">+ {{if eq .Lang "vi"}}Thêm proxy{{else}}Add proxy{{end}}</button>
+    <button type="button" class="btn-secondary" data-open-modal="bulk-proxies-modal">+ {{if eq .Lang "vi"}}Thêm hàng loạt{{else}}Bulk add{{end}}</button>
+  </div>
+</section>
+
+<section class="provider-section provider-catalog-section">
+  <div class="section-title-row provider-group-header">
+    <div><h2>{{if eq .Lang "vi"}}Proxy trong pool{{else}}Proxy pool{{end}}</h2><p>{{if eq .Lang "vi"}}Proxy credentials được che khi hiển thị. Sửa proxy sẽ áp dụng cho mọi provider đang gắn proxy đó.{{else}}Proxy credentials are masked in the UI. Updating a proxy applies to every provider assigned to it.{{end}}</p></div>
+    <div class="provider-group-actions"><span class="pill">{{len .ProxyCards}} {{if eq .Lang "vi"}}proxy{{else}}proxies{{end}}</span></div>
+  </div>
+  <div class="provider-catalog-grid proxy-card-grid">
+    {{range .ProxyCards}}
+    <article class="provider-catalog-card proxy-card {{if not .Enabled}}is-disabled{{end}}" data-proxy-card-search="{{.ID}} {{.Name}} {{.Redacted}}" data-disabled-label="{{if eq $.Lang `vi`}}Đã tắt{{else}}Disabled{{end}}">
+      <div class="provider-icon">PX</div>
+      <div class="provider-catalog-main">
+        <div class="provider-catalog-title"><h3>{{.Name}}</h3><span class="badge {{if .Enabled}}badge-success{{else}}badge-muted{{end}}">{{if .Enabled}}{{if eq $.Lang "vi"}}Đang bật{{else}}Enabled{{end}}{{else}}{{if eq $.Lang "vi"}}Đang tắt{{else}}Disabled{{end}}{{end}}</span></div>
+        <p><code>{{.ID}}</code></p>
+        <div class="proxy-url-row"><code>{{.Redacted}}</code></div>
+        <div class="badge-row provider-badge-row"><span class="badge badge-info">{{.UseCount}} {{if eq $.Lang "vi"}}provider{{else}}providers{{end}}</span></div>
+        <div class="proxy-card-actions">
+          <button type="button" class="btn-secondary btn-sm js-test-proxy-card" data-proxy-id="{{.ID}}">{{if eq $.Lang "vi"}}Kiểm tra{{else}}Test{{end}}</button>
+          <a class="btn-secondary btn-sm" href="/proxies?edit_proxy={{.ID}}">{{tr $.T "common.edit"}}</a>
+          <form method="post" class="inline-form" onsubmit="return confirm('{{if eq $.Lang `vi`}}Xóa proxy này?{{else}}Delete this proxy?{{end}}');">
+            <input type="hidden" name="action" value="delete-proxy">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button type="submit" class="btn-danger btn-sm">{{tr $.T "common.delete"}}</button>
+          </form>
+        </div>
+      </div>
+    </article>
+    {{else}}
+    <article class="provider-card provider-empty-card"><div class="provider-card-head"><div class="provider-icon">+</div><div class="provider-title-block"><h3>{{if eq $.Lang "vi"}}Chưa có proxy{{else}}No proxies yet{{end}}</h3><p>{{if eq $.Lang "vi"}}Nhấn “Thêm proxy” hoặc “Thêm hàng loạt” để bắt đầu.{{else}}Press “Add proxy” or “Bulk add” to get started.{{end}}</p></div></div></article>
+    {{end}}
+  </div>
+</section>
+
+<div class="provider-modal {{if .EditProxy}}is-open{{end}}" id="proxy-modal" aria-hidden="{{if .EditProxy}}false{{else}}true{{end}}" role="dialog" aria-modal="true" aria-labelledby="proxy-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head">
+      <div><p class="eyebrow">{{if eq .Lang "vi"}}Proxy Pool{{else}}Proxy Pool{{end}}</p><h2 id="proxy-modal-title">{{if .EditProxy}}{{if eq .Lang "vi"}}Sửa proxy{{else}}Edit proxy{{end}}{{else}}{{if eq .Lang "vi"}}Thêm proxy{{else}}Add proxy{{end}}{{end}}</h2></div>
+      <button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr .T "common.close"}}">×</button>
+    </div>
+    <form method="post" class="provider-form-grid">
+      <input type="hidden" name="action" value="save-proxy">
+      <label>ID<input name="id" value="{{with .EditProxy}}{{.ID}}{{end}}" placeholder="proxy-us-1" {{if .EditProxy}}readonly{{end}}></label>
+      <label>{{if eq .Lang "vi"}}Tên proxy{{else}}Proxy name{{end}}<input name="name" value="{{with .EditProxy}}{{.Name}}{{end}}" placeholder="US residential 1"></label>
+      <label class="wide">Proxy URL<input name="proxy_url" value="{{with .EditProxy}}{{.URL}}{{end}}" placeholder="http://user:pass@host:port hoặc socks5://user:pass@host:1080" required></label>
+      <label class="checkbox wide"><input type="checkbox" name="enabled" {{if .EditProxy}}{{if .EditProxy.Enabled}}checked{{end}}{{else}}checked{{end}}> {{if eq .Lang "vi"}}Đang bật{{else}}Enabled{{end}}</label>
+      <div class="form-actions wide">
+        <button type="submit">{{if .EditProxy}}{{if eq .Lang "vi"}}Lưu proxy{{else}}Save proxy{{end}}{{else}}{{if eq .Lang "vi"}}Thêm proxy{{else}}Add proxy{{end}}{{end}}</button>
+        <button type="button" class="btn-secondary" data-close-modal>{{tr .T "common.cancel"}}</button>
+      </div>
+    </form>
+  </article>
+</div>
+
+<div class="provider-modal" id="bulk-proxies-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="bulk-proxies-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head">
+      <div><p class="eyebrow">{{if eq .Lang "vi"}}Thêm nhiều proxy{{else}}Bulk add proxies{{end}}</p><h2 id="bulk-proxies-modal-title">{{if eq .Lang "vi"}}Nhập danh sách proxy{{else}}Paste proxy list{{end}}</h2></div>
+      <button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr .T "common.close"}}">×</button>
+    </div>
+    <form method="post" class="provider-form-grid">
+      <input type="hidden" name="action" value="bulk-proxies">
+      <label class="wide">{{if eq .Lang "vi"}}Danh sách proxy{{else}}Proxy list{{end}}<textarea name="bulk_proxies_raw" rows="10" placeholder="name1|http://user:pass@host:port&#10;http://user:pass@host2:port&#10;socks5://user:pass@host3:1080"></textarea></label>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Mỗi dòng một proxy. Format: name|url hoặc chỉ url.{{else}}One proxy per line. Format: name|url or url only.{{end}}</p>
+      <div class="form-actions wide">
+        <button type="submit">{{if eq .Lang "vi"}}Thêm hàng loạt{{else}}Bulk add{{end}}</button>
+        <button type="button" class="btn-secondary" data-close-modal>{{tr .T "common.cancel"}}</button>
+      </div>
+    </form>
+  </article>
+</div>
+{{template "layout_end" .}}

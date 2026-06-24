@@ -1,0 +1,267 @@
+{{template "layout_start" .}}
+
+{{with .SelectedProvider}}
+<section class="panel provider-detail-panel provider-detail-page" id="provider-detail">
+  <div class="provider-detail-head">
+    <a class="btn-secondary" href="/providers">← {{if eq $.Lang "vi"}}Tất cả providers{{else}}All providers{{end}}</a>
+    <div class="provider-detail-title">
+      <div class="provider-icon provider-icon-large">{{.IconText}}</div>
+      <div>
+        <p class="eyebrow">{{if eq $.Lang "vi"}}Trang quản lý provider{{else}}Provider management page{{end}}</p>
+        <h1>{{.Name}}</h1>
+        <p><code>{{.ID}}</code> · {{.Type}}</p>
+      </div>
+    </div>
+    <form method="post" class="provider-detail-toggle-card" title='{{if .Enabled}}{{if eq $.Lang "vi"}}Tắt provider{{else}}Disable provider{{end}}{{else}}{{if eq $.Lang "vi"}}Bật provider{{else}}Enable provider{{end}}{{end}}'>
+      <input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="{{.ID}}">
+      {{if .Enabled}}<input type="hidden" name="enabled" value="false"><button type="submit" class="provider-toggle is-on"><span></span></button><strong>{{if eq $.Lang "vi"}}Đang bật{{else}}Enabled{{end}}</strong><small>{{if eq $.Lang "vi"}}Nhấn để tắt provider{{else}}Click to disable provider{{end}}</small>{{else}}<input type="hidden" name="enabled" value="true"><button type="submit" class="provider-toggle"><span></span></button><strong>{{if eq $.Lang "vi"}}Đang tắt{{else}}Disabled{{end}}</strong><small>{{if eq $.Lang "vi"}}Nhấn để bật provider{{else}}Click to enable provider{{end}}</small>{{end}}
+    </form>
+  </div>
+
+  <div class="badge-row provider-badge-row provider-detail-badges">
+    <span class="badge badge-{{.StatusClass}} badge-primary-status">{{.StatusLabel}}</span>
+    <span class="badge badge-{{.AuthClass}}">{{.AuthLabel}}</span>
+    <span class="badge badge-{{.ProxyClass}}">{{.ProxyLabel}}</span>
+    {{range .CapabilityBadges}}<span class="badge badge-{{.Class}}" title="{{.Title}}">{{.Label}}</span>{{end}}
+  </div>
+
+  {{if .DefaultWarning}}<div class="provider-warning provider-warning-danger">{{.DefaultWarning}}</div>{{end}}
+  {{if .Cooldown}}<div class="provider-warning">Cooldown {{.CooldownRemaining}}{{if .CooldownReason}} · {{.CooldownReason}}{{end}}</div>{{end}}
+
+  <div class="provider-detail-grid">
+    <article class="provider-detail-card"><span>{{tr $.T "providers.credentials"}}</span><strong class="text-{{.SecretClass}}" title="{{.SecretTitle}}">{{.SecretLabel}}</strong></article>
+    <article class="provider-detail-card"><span>{{tr $.T "providers.models"}}</span><strong data-model-count="{{.ID}}">{{.ModelCount}}</strong></article>
+    <article class="provider-detail-card"><span>{{tr $.T "providers.requests"}} · {{.UsagePeriodLabel}}</span><strong title="{{.UsageRequests}} requests in {{.UsagePeriodLabel}}">{{.UsageRequests}}</strong></article>
+    <article class="provider-detail-card"><span>{{if eq $.Lang "vi"}}Token sử dụng{{else}}Tokens used{{end}} · {{.UsagePeriodLabel}}</span><strong title="{{fmtTokens .UsageTokens}} tokens across {{.UsageRequests}} requests">{{fmtTokensShort .UsageTokens}}</strong></article>
+    <article class="provider-detail-card"><span>{{tr $.T "providers.errors"}}</span><strong>{{.ErrorCount}}</strong></article>
+  </div>
+
+  <div class="provider-detail-grid two">
+    <article class="provider-detail-card wide"><span>{{if eq $.Lang "vi"}}Khoảng thời gian thống kê{{else}}Usage period{{end}}</span><div class="provider-usage-filter"><a class="btn-secondary {{if eq $.ProviderUsagePeriod "day"}}active{{end}}" href="/providers/{{.ID}}?usage_period=day">{{if eq $.Lang "vi"}}Ngày{{else}}Day{{end}}</a><a class="btn-secondary {{if eq $.ProviderUsagePeriod "week"}}active{{end}}" href="/providers/{{.ID}}?usage_period=week">{{if eq $.Lang "vi"}}Tuần{{else}}Week{{end}}</a><a class="btn-secondary {{if eq $.ProviderUsagePeriod "all"}}active{{end}}" href="/providers/{{.ID}}?usage_period=all">All time</a></div></article>
+  </div>
+
+  <div class="provider-detail-grid two">
+    <article class="provider-detail-card wide"><span>Base URL</span>{{if .BaseURL}}<code title="{{.BaseURL}}">{{.BaseURL}}</code>{{else}}<strong class="muted-text">{{if eq $.Lang "vi"}}chưa thiết lập{{else}}unset{{end}}</strong>{{end}}</article>
+    <article class="provider-detail-card wide"><span>Proxy</span>
+      {{if .ProxyID}}
+        <strong>{{if .ProxyName}}{{.ProxyName}}{{else}}{{.ProxyID}}{{end}}</strong>
+        <small class="muted-text"><code>{{.ProxyID}}</code> · {{if .ProxyEnabled}}{{if eq $.Lang "vi"}}Đang bật{{else}}Enabled{{end}}{{else}}{{if eq $.Lang "vi"}}Đang tắt hoặc không tìm thấy{{else}}Disabled or missing{{end}}{{end}}</small>
+        {{if .ProxyURL}}<code title="{{.ProxyURL}}">{{.ProxyURL}}</code>{{else}}<small class="muted-text">{{if eq $.Lang "vi"}}Proxy không hoạt động hoặc không tồn tại{{else}}Proxy disabled or missing{{end}}</small>{{end}}
+      {{else if .ProxyURL}}
+        <code title="{{.ProxyURL}}">{{.ProxyURL}}</code>
+      {{else}}
+        <strong class="muted-text">{{if eq $.Lang "vi"}}trực tiếp{{else}}direct{{end}}</strong>
+      {{end}}
+    </article>
+  </div>
+
+  <div class="provider-detail-grid provider-runtime-grid">
+    <article class="provider-detail-card"><span>{{if eq $.Lang "vi"}}Trạng thái cuối{{else}}Last status{{end}}</span><strong>{{if .LastStatus}}{{.LastStatus}}{{else}}—{{end}}</strong></article>
+    <article class="provider-detail-card"><span>{{if eq $.Lang "vi"}}Lần cuối thấy{{else}}Last seen{{end}}</span><strong>{{if .LastSeen}}{{.LastSeen}}{{else}}—{{end}}</strong></article>
+    <article class="provider-detail-card provider-runtime-error"><span>{{if eq $.Lang "vi"}}Lỗi gần nhất{{else}}Last error{{end}}</span>{{if .LastError}}<code title="{{.LastError}}">{{.LastError}}</code>{{else}}<strong class="muted-text">{{if eq $.Lang "vi"}}không có{{else}}none{{end}}</strong>{{end}}</article>
+  </div>
+
+  <section class="provider-detail-section">
+    <div class="section-title-row compact provider-detail-subhead">
+      <div><p class="eyebrow">{{if eq $.Lang "vi"}}Model đã lưu{{else}}Saved models{{end}}</p><h2>{{if eq $.Lang "vi"}}Danh sách model{{else}}Model list{{end}}</h2></div>
+      <input class="combo-model-search provider-detail-model-filter" type="search" placeholder="{{if eq $.Lang "vi"}}Lọc model...{{else}}Filter models...{{end}}">
+    </div>
+    <div class="model-chip-list provider-model-list provider-detail-model-list is-collapsed" data-provider-model-list="{{.ID}}">
+      {{range .VisibleModels}}<span class="model-chip model-chip-action" data-model-chip="{{.Name}}" title="{{.Name}}"><code title="{{.Name}}">{{.Name}}</code><span class="model-usage-badge" title="{{fmtTokens .Tokens}} tokens · {{.Requests}} requests in {{$.SelectedProvider.UsagePeriodLabel}}">{{if .HasUsage}}{{fmtTokensShort .Tokens}}{{else}}0{{end}}</span><button type="button" class="chip-test-btn js-test-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}" title="{{.Name}}">{{tr $.T "providers.test"}}</button><span class="model-test-result" aria-live="polite"></span></span>{{else}}<span class="muted-text">{{tr $.T "providers.no_model"}}</span>{{end}}
+      {{range .HiddenModels}}<span class="model-chip model-chip-action provider-model-extra" data-model-chip="{{.Name}}" title="{{.Name}}" hidden><code title="{{.Name}}">{{.Name}}</code><span class="model-usage-badge" title="{{fmtTokens .Tokens}} tokens · {{.Requests}} requests in {{$.SelectedProvider.UsagePeriodLabel}}">{{if .HasUsage}}{{fmtTokensShort .Tokens}}{{else}}0{{end}}</span><button type="button" class="chip-test-btn js-test-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}" title="{{.Name}}">{{tr $.T "providers.test"}}</button><span class="model-test-result" aria-live="polite"></span></span>{{end}}
+    </div>
+    {{if gt .HiddenModelCount 0}}<button type="button" class="btn-secondary provider-model-toggle provider-detail-model-toggle js-expand-provider-models" data-hidden-count="{{.HiddenModelCount}}">{{if eq $.Lang "vi"}}Hiện thêm {{.HiddenModelCount}} model{{else}}Show {{.HiddenModelCount}} more models{{end}}</button>{{end}}
+    <form method="post" class="provider-custom-model-form">
+      <input type="hidden" name="action" value="add-models">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <label>{{if eq $.Lang "vi"}}Thêm model custom{{else}}Add custom models{{end}}<textarea name="custom_models" rows="2" placeholder="custom-model-1, vendor/model-2"></textarea></label>
+      <button type="submit" class="btn-secondary">{{if eq $.Lang "vi"}}Thêm model{{else}}Add models{{end}}</button>
+      <small class="muted-text">{{if eq $.Lang "vi"}}Nhập nhiều model bằng dấu phẩy hoặc xuống dòng. Model trùng sẽ tự bỏ qua.{{else}}Enter multiple models with commas or new lines. Duplicates are ignored.{{end}}</small>
+    </form>
+    <div class="provider-action-result" data-provider-result="{{.ID}}" aria-live="polite"></div>
+  </section>
+
+  <section class="provider-detail-section">
+    <div class="section-title-row compact provider-detail-subhead">
+      <div>
+        <p class="eyebrow">{{if eq $.Lang "vi"}}Quản lý khóa API{{else}}API Key Pool{{end}}</p>
+        <h2>{{if eq $.Lang "vi"}}Danh sách khóa API{{else}}API Key List{{end}}</h2>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-secondary js-btn-add-key" data-open-modal="add-key-modal">{{if eq $.Lang "vi"}}+ Thêm key{{else}}+ Add key{{end}}</button>
+        <button type="button" class="btn-secondary" data-open-modal="bulk-keys-modal">{{if eq $.Lang "vi"}}+ Thêm hàng loạt{{else}}+ Bulk add{{end}}</button>
+      </div>
+    </div>
+
+    <form method="post" class="provider-keys-strategy-form provider-keys-strategy-card settings-card">
+      <input type="hidden" name="action" value="save-keys-config">
+      <input type="hidden" name="id" value="{{.ID}}">
+
+      <div class="form-grid align-end">
+        <label>
+          {{if eq $.Lang "vi"}}Chiến lược phân tải (Strategy){{else}}Strategy{{end}}
+          <select name="key_strategy">
+            <option value="fill-first" {{if eq .KeyStrategy "fill-first"}}selected{{end}}>{{if eq $.Lang "vi"}}Fill-first (Ưu tiên key chính, lỗi mới dùng key phụ){{else}}Fill-first (Try highest priority first){{end}}</option>
+            <option value="round-robin" {{if eq .KeyStrategy "round-robin"}}selected{{end}}>{{if eq $.Lang "vi"}}Round-robin (Xoay vòng đều){{else}}Round-robin (Load balancing){{end}}</option>
+          </select>
+        </label>
+        <label>
+          Sticky Limit
+          <input name="sticky_limit" type="number" min="1" value="{{.StickyLimit}}">
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="btn-secondary">{{if eq $.Lang "vi"}}Cập nhật chiến lược{{else}}Update Strategy{{end}}</button>
+        </div>
+      </div>
+    </form>
+
+    {{if .Keys}}
+      <div class="api-key-card-grid">
+        {{range .Keys}}
+          <div class="api-key-card api-key-card-modern {{if not .Enabled}}is-disabled{{end}}" data-key-card-id="{{.ID}}">
+            <div class="api-key-card-head-modern">
+              <div class="api-key-title-block">
+                <span class="badge {{if .Enabled}}badge-success{{else}}badge-muted{{end}}">
+                  {{if .Enabled}}{{if eq $.Lang "vi"}}Đang bật{{else}}Active{{end}}{{else}}{{if eq $.Lang "vi"}}Đang tắt{{else}}Disabled{{end}}{{end}}
+                </span>
+                <span class="badge badge-info">Priority: {{.Priority}}</span>
+                <h3 title="{{.Name}}">{{.Name}}</h3>
+              </div>
+            </div>
+            <div class="api-key-secret-row">
+              <code class="api-key-secret">{{.Key}}</code>
+            </div>
+            <div class="api-key-card-footer">
+              <div class="form-actions wide api-key-actions">
+                <button type="button" class="btn-secondary btn-sm js-edit-key-btn"
+                        data-key-id="{{.ID}}"
+                        data-key-name="{{.Name}}"
+                        data-key-priority="{{.Priority}}"
+                        data-key-enabled="{{if .Enabled}}true{{else}}false{{end}}">
+                  {{tr $.T "common.edit"}}
+                </button>
+                <form method="post" class="inline-form" onsubmit="return confirm('{{if eq $.Lang `vi`}}Xóa key này?{{else}}Delete this key?{{end}}');">
+                  <input type="hidden" name="action" value="save-keys-config">
+                  <input type="hidden" name="id" value="{{$.SelectedProvider.ID}}">
+                  <input type="hidden" name="delete_key_btn" value="{{.ID}}">
+                  <button type="submit" class="btn-danger btn-sm">{{if eq $.Lang "vi"}}Xóa{{else}}Delete{{end}}</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {{end}}
+      </div>
+    {{else}}
+      <p class="muted-text keys-empty-text">{{if eq $.Lang "vi"}}Chưa có key nào trong pool. Sẽ tự dùng API Key mặc định của Provider ở trên.{{else}}No keys in pool yet. Will fallback to the provider's default API Key above.{{end}}</p>
+    {{end}}
+  </section>
+
+  <div class="provider-card-actions provider-detail-actions">
+    <button type="button" class="btn-secondary js-fetch-models" data-provider-id="{{.ID}}">{{tr $.T "providers.fetch_models"}}</button>
+    {{if eq .Type "codex"}}<button type="button" class="btn-secondary js-refresh-codex-quota" data-provider-id="{{.ID}}">{{tr $.T "providers.quota"}}</button>{{end}}
+    {{if eq .Type "antigravity"}}<button type="button" class="btn-secondary js-refresh-antigravity-quota" data-provider-id="{{.ID}}">{{tr $.T "providers.quota"}}</button>{{end}}
+    <a class="btn-secondary" href="/providers/{{.ID}}?edit=1">{{tr $.T "common.edit"}}</a>
+    <form method="post" class="inline-form" onsubmit="return confirm(this.dataset.confirmMessage);" data-confirm-message="{{if eq $.Lang `vi`}}Xóa provider {{.ID}}? Hành động này không thể hoàn tác.{{else}}Delete provider {{.ID}}? This cannot be undone.{{end}}"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" class="btn-danger">{{tr $.T "common.delete"}}</button></form>
+  </div>
+</section>
+{{else}}
+<section class="empty-state"><h2>{{tr .T "providers.no_provider"}}</h2><p>{{if eq .Lang "vi"}}Provider không tồn tại hoặc đã bị xóa.{{else}}Provider does not exist or was deleted.{{end}}</p><a class="btn-secondary" href="/providers">← {{if eq .Lang "vi"}}Tất cả providers{{else}}All providers{{end}}</a></section>
+{{end}}
+
+{{with .SelectedProvider}}
+<div class="provider-modal" id="add-key-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="add-key-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head">
+      <div><p class="eyebrow">{{if eq $.Lang "vi"}}Thêm key mới{{else}}Add new key{{end}}</p><h2 id="add-key-modal-title">{{.Name}}</h2></div>
+      <button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr $.T "common.close"}}">×</button>
+    </div>
+    <form method="post" class="provider-form-grid" id="provider-key-modal-form">
+      <input type="hidden" name="action" value="add-key">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <input type="hidden" name="key_id" value="" id="provider-key-modal-id">
+      <label>{{if eq $.Lang "vi"}}Tên key{{else}}Key name{{end}}<input name="key_name" id="provider-key-modal-name" placeholder="primary, backup-1"></label>
+      <label>{{if eq $.Lang "vi"}}Độ ưu tiên{{else}}Priority{{end}}<input name="key_priority" id="provider-key-modal-priority" type="number" min="1" value="1"></label>
+      <label class="wide">API Key<input name="key_value" id="provider-key-modal-value" type="password" placeholder="sk-..." required></label>
+      <label class="checkbox wide"><input type="checkbox" name="key_enabled" id="provider-key-modal-enabled" checked> {{if eq $.Lang "vi"}}Đang bật{{else}}Enabled{{end}}</label>
+      <div class="form-actions wide">
+        <button type="submit" id="provider-key-modal-submit">{{if eq $.Lang "vi"}}Thêm key{{else}}Add key{{end}}</button>
+        <button type="button" class="btn-secondary" data-close-modal>{{tr $.T "common.cancel"}}</button>
+      </div>
+    </form>
+  </article>
+</div>
+
+<div class="provider-modal" id="bulk-keys-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="bulk-keys-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head">
+      <div><p class="eyebrow">{{if eq $.Lang "vi"}}Thêm nhiều key{{else}}Bulk add keys{{end}}</p><h2 id="bulk-keys-modal-title">{{.Name}}</h2></div>
+      <button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr $.T "common.close"}}">×</button>
+    </div>
+    <form method="post" class="provider-form-grid">
+      <input type="hidden" name="action" value="bulk-keys">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <label class="wide">{{if eq $.Lang "vi"}}Danh sách key{{else}}Keys{{end}}<textarea name="bulk_keys_raw" rows="8" placeholder="name1|sk-key1&#10;name2|sk-key2&#10;sk-key-only-auto-named"></textarea></label>
+      <p class="wide muted-text">{{if eq $.Lang "vi"}}Mỗi dòng 1 key. Format: name|key hoặc chỉ key.{{else}}One key per line. Format: name|key or just key.{{end}}</p>
+      <div class="form-actions wide">
+        <button type="submit">{{if eq $.Lang "vi"}}Thêm hàng loạt{{else}}Bulk add{{end}}</button>
+        <button type="button" class="btn-secondary" data-close-modal>{{tr $.T "common.cancel"}}</button>
+      </div>
+    </form>
+  </article>
+</div>
+{{end}}
+
+<div class="provider-modal {{if .EditProvider}}is-open{{end}}" id="apikey-provider-modal" aria-hidden="{{if .EditProvider}}false{{else}}true{{end}}" role="dialog" aria-modal="true" aria-labelledby="apikey-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Provider API key{{else}}API Key Providers{{end}}</p>
+        <h2 id="apikey-modal-title">{{if .EditProvider}}{{if eq $.Lang "vi"}}Sửa provider{{else}}Edit provider{{end}} <code>{{.EditProvider.ID}}</code>{{else}}{{if eq .Lang "vi"}}Sửa provider{{else}}Edit provider{{end}}{{end}}</h2>
+      </div>
+      <button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr .T "common.close"}}">×</button>
+    </div>
+    <form method="post" class="provider-form-grid">
+      <label>ID<input name="id" placeholder="openai hoặc openrouter" value="{{with .EditProvider}}{{.ID}}{{else}}{{with .SelectedProvider}}{{.ID}}{{end}}{{end}}" readonly required></label>
+      <label>Type
+        <select name="type">
+          <option value="openai-compatible" {{with .EditProvider}}{{if eq .Type "openai-compatible"}}selected{{end}}{{end}}>openai-compatible</option>
+          <option value="codex" {{with .EditProvider}}{{if eq .Type "codex"}}selected{{end}}{{end}}>codex</option>
+          <option value="mimo-free" {{with .EditProvider}}{{if eq .Type "mimo-free"}}selected{{end}}{{end}}>mimo-free</option>
+          <option value="opencode" {{with .EditProvider}}{{if eq .Type "opencode"}}selected{{end}}{{end}}>opencode</option>
+          <option value="antigravity" {{with .EditProvider}}{{if eq .Type "antigravity"}}selected{{end}}{{end}}>antigravity</option>
+        </select>
+      </label>
+      <label>{{if eq .Lang "vi"}}Tên hiển thị{{else}}Name{{end}}<input name="name" placeholder="OpenAI Main" value="{{with .EditProvider}}{{.Name}}{{end}}"></label>
+      <label>Base URL<input name="base_url" placeholder="https://api.openai.com/v1" value="{{with .EditProvider}}{{.BaseURL}}{{end}}"></label>
+      <label>{{if eq .Lang "vi"}}API Key{{else}}API Key{{end}}<input name="api_key" type="password" placeholder='{{if .EditProvider}}{{if eq $.Lang "vi"}}để trống để giữ API key hiện tại{{else}}leave blank to keep current API key{{end}}{{else}}sk-...{{end}}'></label>
+      <label>{{if eq .Lang "vi"}}Access Token{{else}}Access Token{{end}}<input name="access_token" type="password" placeholder='{{if .EditProvider}}{{if eq $.Lang "vi"}}để trống để giữ access token{{else}}leave blank to keep access token{{end}}{{else}}{{if eq $.Lang "vi"}}Bearer token tùy chọn{{else}}Optional bearer token{{end}}{{end}}'></label>
+      <label>{{if eq .Lang "vi"}}Refresh Token{{else}}Refresh Token{{end}}<input name="refresh_token" type="password" placeholder='{{if .EditProvider}}{{if eq $.Lang "vi"}}để trống để giữ refresh token{{else}}leave blank to keep refresh token{{end}}{{else}}{{if eq $.Lang "vi"}}Refresh token tùy chọn{{else}}Optional refresh token{{end}}{{end}}'></label>
+      {{$provProxyID := ""}}
+      {{with .EditProvider}}{{$provProxyID = .ProxyID}}{{end}}
+      <label>Proxy Pool
+        <select name="proxy_id">
+          <option value="">-- {{if eq $.Lang "vi"}}Không dùng hoặc dùng Custom URL{{else}}None / Custom URL{{end}} --</option>
+          {{range $.Proxies}}
+            <option value="{{.ID}}" {{if eq .ID $provProxyID}}selected{{end}}>{{.Name}} ({{.ID}})</option>
+          {{end}}
+        </select>
+      </label>
+      <label>Proxy URL (Custom)<input name="proxy_url" data-proxy-input placeholder="http://user:pass@host:port hoặc socks5://user:pass@host:1080" value="{{with .EditProvider}}{{.ProxyURL}}{{end}}"></label>
+      <label class="wide">{{if eq .Lang "vi"}}Models{{else}}Models{{end}}<textarea name="models" placeholder="gpt-4.1, gpt-4o-mini hoặc cx/gpt-5.5">{{with .EditProvider}}{{range $i, $m := .Models}}{{if $i}}, {{end}}{{$m}}{{end}}{{end}}</textarea></label>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Nếu nhập proxy, mọi thao tác lấy models, test model và request chat của provider này sẽ dùng proxy riêng thay vì IP máy chính.{{else}}When a proxy is set, model fetches, model tests, and chat requests for this provider use that proxy instead of the host IP.{{end}}</p>
+      <label class="checkbox"><input name="enabled" type="checkbox" {{if .EditProvider}}{{if .EditProvider.Enabled}}checked{{end}}{{else}}{{with .SelectedProvider}}{{if .Enabled}}checked{{end}}{{end}}{{end}}> {{if eq .Lang "vi"}}Đang bật{{else}}Enabled{{end}}</label>
+      <div class="form-actions wide">
+        <button type="button" class="btn-secondary js-test-proxy">{{tr .T "providers.proxy_test"}}</button>
+        <button type="submit">{{tr .T "common.save"}}</button>
+        <a class="btn-secondary" href="{{with .SelectedProvider}}/providers/{{.ID}}{{else}}/providers{{end}}">{{tr .T "common.cancel"}}</a>
+        <button type="button" class="btn-secondary" data-close-modal>{{tr .T "common.close"}}</button>
+      </div>
+      <div class="wide provider-result"></div>
+    </form>
+  </article>
+</div>
+
+{{template "layout_end" .}}

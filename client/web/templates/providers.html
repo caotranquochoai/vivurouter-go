@@ -1,0 +1,190 @@
+{{template "layout_start" .}}
+<section class="providers-hero provider-catalog-hero">
+  <div>
+    <p class="eyebrow">{{tr .T "providers.eyebrow"}}</p>
+    <h1>{{tr .T "providers.title"}}</h1>
+    <p>{{tr .T "providers.subtitle"}}</p>
+  </div>
+  <div class="provider-summary-grid provider-summary-compact">
+    <article><span>{{tr .T "providers.total"}}</span><strong>{{.ProviderSummary.Total}}</strong></article>
+    <article><span>{{tr .T "providers.enabled"}}</span><strong>{{.ProviderSummary.Enabled}}</strong></article>
+    <article><span>{{tr .T "providers.credentials"}}</span><strong>{{.ProviderSummary.WithCredentials}}</strong></article>
+    <article><span>{{tr .T "providers.cooldown"}}</span><strong>{{.ProviderSummary.InCooldown}}</strong></article>
+  </div>
+</section>
+
+<section class="provider-catalog-toolbar">
+  <div class="provider-search-wrap"><span>⌕</span><input type="search" id="provider-catalog-search" placeholder="{{if eq .Lang "vi"}}Tìm provider, model, trạng thái...{{else}}Search providers, models, status...{{end}}"></div>
+  <div class="provider-add-menu provider-preset-menu">
+    <button type="button" class="provider-add-btn provider-add-wide js-provider-add-toggle" aria-expanded="false">+ {{if eq .Lang "vi"}}Thêm provider{{else}}Add provider{{end}}</button>
+    <div class="provider-preset-dropdown" hidden>
+      <button type="button" data-open-modal="oauth-provider-modal">Codex OAuth <small>{{if eq .Lang "vi"}}Đăng nhập OAuth/local token{{else}}OAuth/local token login{{end}}</small></button>
+      <button type="button" data-open-modal="antigravity-oauth-modal">Antigravity OAuth <small>{{if eq .Lang "vi"}}Lấy Google OAuth token{{else}}Google OAuth token login{{end}}</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="openai">OpenAI <small>https://api.openai.com/v1</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="openrouter">OpenRouter <small>https://openrouter.ai/api/v1</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="groq">Groq <small>https://api.groq.com/openai/v1</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="ollama">Ollama/local <small>http://localhost:11434/v1</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="vivurouter">vivurouter upstream <small>OpenAI-compatible</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="mimo-free">MiMo Code Free <small>{{if eq .Lang "vi"}}Free/no-auth{{else}}Free/no-auth{{end}}</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="opencode">OpenCode Free <small>{{if eq .Lang "vi"}}Bearer public/no-auth{{else}}Bearer public/no-auth{{end}}</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="antigravity">Antigravity <small>{{if eq .Lang "vi"}}Google OAuth token{{else}}Google OAuth token{{end}}</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="anthropic-proxy">Anthropic proxy <small>{{if eq .Lang "vi"}}Proxy tương thích OpenAI{{else}}OpenAI-compatible proxy{{end}}</small></button>
+      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="gemini-proxy">Gemini proxy <small>{{if eq .Lang "vi"}}Proxy tương thích OpenAI{{else}}OpenAI-compatible proxy{{end}}</small></button>
+    </div>
+  </div>
+</section>
+
+{{range .ProviderGroups}}
+<section class="provider-section provider-catalog-section" data-provider-group="{{.Key}}">
+  <div class="section-title-row provider-group-header">
+    <div><h2>{{.Title}}</h2><p>{{.Subtitle}}</p></div>
+    <div class="provider-group-actions"><span class="pill">{{len .Cards}} {{if eq $.Lang "vi"}}provider{{else}}providers{{end}}</span></div>
+  </div>
+  <div class="provider-catalog-grid">
+    {{range .Cards}}
+    <a class="provider-catalog-card {{if not .Enabled}}is-disabled{{end}}" href="/providers/{{.ID}}" data-disabled-label="{{if eq $.Lang `vi`}}Đã tắt{{else}}Disabled{{end}}" data-provider-card-search="{{.ID}} {{.Name}} {{.Type}} {{.StatusLabel}} {{.AuthLabel}} {{.ProxyLabel}} {{range .Models}} {{.}}{{end}}">
+      <div class="provider-icon">{{.IconText}}</div>
+      <div class="provider-catalog-main">
+        <div class="provider-catalog-title"><h3>{{.Name}}</h3><span class="badge badge-{{.StatusClass}}">{{.StatusLabel}}</span></div>
+        <p><code>{{.ID}}</code> · {{.Type}}</p>
+        <div class="badge-row provider-badge-row"><span class="badge badge-{{.AuthClass}}">{{.AuthLabel}}</span>{{if gt .KeyCount 0}}<span class="badge badge-info">{{.KeyCount}} keys</span>{{end}}<span class="badge badge-{{.ProxyClass}}">{{.ProxyLabel}}</span>{{range .CapabilityBadges}}<span class="badge badge-{{.Class}}" title="{{.Title}}">{{.Label}}</span>{{end}}</div>
+      </div>
+    </a>
+    {{else}}
+    <article class="provider-card provider-empty-card"><div class="provider-card-head"><div class="provider-icon">+</div><div class="provider-title-block"><h3>{{tr $.T "providers.no_provider"}}</h3><p>{{if eq .Key "oauth"}}{{if eq $.Lang "vi"}}Nhấn + Codex OAuth hoặc Antigravity OAuth để kết nối.{{else}}Press + Codex OAuth or Antigravity OAuth to connect.{{end}}{{else}}{{if eq $.Lang "vi"}}Nhấn + OpenAI-compatible để thêm provider.{{else}}Press + OpenAI-compatible to add a provider.{{end}}{{end}}</p></div></div></article>
+    {{end}}
+  </div>
+</section>
+{{else}}
+<section class="empty-state"><h2>{{tr .T "providers.no_provider"}}</h2><p>{{if eq .Lang "vi"}}Thêm OpenAI-compatible provider hoặc kết nối Codex OAuth để bắt đầu.{{else}}Add an OpenAI-compatible provider or connect Codex OAuth to get started.{{end}}</p></section>
+{{end}}
+
+<div class="provider-modal" id="oauth-provider-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="oauth-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card">
+    <div class="provider-modal-head">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Provider OAuth{{else}}OAuth Providers{{end}}</p>
+        <h2 id="oauth-modal-title">{{tr .T "providers.oauth_title"}}</h2>
+      </div>
+      <button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr .T "common.close"}}">×</button>
+    </div>
+    <p>{{tr .T "providers.oauth_desc"}} <code>http://localhost:1455/auth/callback</code></p>
+    <form method="post" action="/api/codex/oauth/start" class="provider-form-grid provider-form-single" id="codex-oauth-form">
+      <label>{{if eq .Lang "vi"}}Codex provider ID{{else}}Codex provider ID{{end}}<input name="provider_id" value="" placeholder="{{if eq .Lang "vi"}}Tự tạo: codex-2, codex-3... nếu để trống{{else}}Auto-create: codex-2, codex-3... when blank{{end}}"></label>
+      <label>Proxy URL<input name="proxy_url" data-proxy-input placeholder="http://user:pass@host:port hoặc socks5://user:pass@host:1080"></label>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Để trống provider ID khi thêm account mới để hệ thống tự tạo ID không trùng như codex-2/codex-3. Proxy sẽ được dùng ngay từ bước token exchange OAuth và lưu vào provider. Nếu proxy nhập sai, hệ thống sẽ fail-closed thay vì fallback IP gốc.{{else}}Leave provider ID blank for a new account so the system creates a unique ID such as codex-2/codex-3. Proxy is used from OAuth token exchange onward and saved to the provider. If the proxy is invalid, the flow fails closed instead of falling back to the machine IP.{{end}}</p>
+      <div class="form-actions wide">
+        <button type="button" class="btn-secondary js-test-proxy">{{tr .T "providers.proxy_test"}}</button>
+        <button type="submit">{{tr .T "providers.open_oauth"}}</button>
+        <button type="button" class="btn-secondary js-create-oauth-link" data-oauth-start="/api/codex/oauth/start" data-oauth-complete="/api/codex/oauth/complete" data-oauth-box="oauth-manual-box" data-oauth-auth-link="oauth-auth-link" data-oauth-callback-link="oauth-callback-link">{{tr .T "providers.create_link"}}</button>
+        <button type="button" class="btn-secondary" data-close-modal>{{tr .T "common.cancel"}}</button>
+      </div>
+      <div class="wide oauth-manual-box" id="oauth-manual-box" hidden>
+        <label>{{if eq .Lang "vi"}}Link xác thực{{else}}Authorization link{{end}}<textarea id="oauth-auth-link" readonly rows="3"></textarea></label>
+        <button type="button" class="btn-secondary js-copy-oauth-link" data-oauth-auth-link="oauth-auth-link">{{if eq .Lang "vi"}}Copy link xác thực{{else}}Copy authorization link{{end}}</button>
+        <label>{{if eq .Lang "vi"}}Callback/Auth link sau khi đăng nhập{{else}}Callback/Auth link after sign-in{{end}}<textarea id="oauth-callback-link" rows="3" placeholder='{{if eq .Lang "vi"}}Dán URL callback có code và state tại đây{{else}}Paste the callback URL containing code and state here{{end}}'></textarea></label>
+        <button type="button" class="btn-secondary js-complete-oauth-link" data-oauth-complete="/api/codex/oauth/complete" data-oauth-callback-link="oauth-callback-link">{{tr .T "providers.complete_oauth"}}</button>
+      </div>
+      <div class="wide provider-result" id="oauth-proxy-result"></div>
+    </form>
+    {{with .CodexOAuth}}
+      {{if .Status}}
+        <div class="oauth-status-box">
+          <span class="badge badge-info">{{.Status}}</span>
+          {{if .ProviderID}}<span class="muted-text">Provider <code>{{.ProviderID}}</code></span>{{end}}
+          {{if .AuthURL}}<a href="{{.AuthURL}}" target="_blank" rel="noreferrer">{{if eq $.Lang "vi"}}Mở trang xác thực OpenAI{{else}}Open OpenAI authorization{{end}}</a>{{end}}
+          {{if .Error}}<p class="error-text">{{.Error}}</p>{{end}}
+        </div>
+      {{end}}
+    {{end}}
+    <p><small>{{if eq .Lang "vi"}}Nếu port <code>1455</code> đang bận, hãy tắt Codex CLI/OAuth flow khác rồi thử lại.{{else}}If port <code>1455</code> is busy, stop another Codex CLI/OAuth flow and try again.{{end}}</small></p>
+  </article>
+</div>
+
+<div class="provider-modal" id="antigravity-oauth-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="antigravity-oauth-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card">
+    <div class="provider-modal-head">
+      <div>
+        <p class="eyebrow">{{if eq .Lang "vi"}}Provider OAuth{{else}}OAuth Provider{{end}}</p>
+        <h2 id="antigravity-oauth-modal-title">Antigravity OAuth</h2>
+      </div>
+      <button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr .T "common.close"}}">×</button>
+    </div>
+    <p>{{if eq .Lang "vi"}}Flow này dùng Google OAuth public client từ Antigravity và callback local <code>http://localhost:1456/auth/callback</code>.{{else}}This flow uses the Antigravity Google OAuth public client and local callback <code>http://localhost:1456/auth/callback</code>.{{end}}</p>
+    <form method="post" action="/api/antigravity/oauth/start" class="provider-form-grid provider-form-single" id="antigravity-oauth-form">
+      <label>Antigravity provider ID<input name="provider_id" value="" placeholder="{{if eq .Lang "vi"}}Tự tạo: antigravity-2... nếu để trống{{else}}Auto-create: antigravity-2... when blank{{end}}"></label>
+      <label>Proxy URL<input name="proxy_url" data-proxy-input placeholder="http://user:pass@host:port hoặc socks5://user:pass@host:1080"></label>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Để trống provider ID khi thêm account mới để hệ thống tự tạo ID không trùng. Proxy sẽ được dùng từ bước token exchange OAuth và lưu vào provider.{{else}}Leave provider ID blank for a new account so the system creates a unique ID. Proxy is used from OAuth token exchange onward and saved to the provider.{{end}}</p>
+      <div class="form-actions wide">
+        <button type="button" class="btn-secondary js-test-proxy">{{tr .T "providers.proxy_test"}}</button>
+        <button type="submit">{{if eq .Lang "vi"}}Mở Google OAuth Antigravity{{else}}Open Antigravity OAuth{{end}}</button>
+        <button type="button" class="btn-secondary js-create-oauth-link" data-oauth-start="/api/antigravity/oauth/start" data-oauth-complete="/api/antigravity/oauth/complete" data-oauth-box="antigravity-oauth-manual-box" data-oauth-auth-link="antigravity-oauth-auth-link" data-oauth-callback-link="antigravity-oauth-callback-link">{{tr .T "providers.create_link"}}</button>
+        <button type="button" class="btn-secondary" data-close-modal>{{tr .T "common.cancel"}}</button>
+      </div>
+      <div class="wide oauth-manual-box" id="antigravity-oauth-manual-box" hidden>
+        <label>{{if eq .Lang "vi"}}Link xác thực{{else}}Authorization link{{end}}<textarea id="antigravity-oauth-auth-link" readonly rows="3"></textarea></label>
+        <button type="button" class="btn-secondary js-copy-oauth-link" data-oauth-auth-link="antigravity-oauth-auth-link">{{if eq .Lang "vi"}}Copy link xác thực{{else}}Copy authorization link{{end}}</button>
+        <label>{{if eq .Lang "vi"}}Callback/Auth link sau khi đăng nhập{{else}}Callback/Auth link after sign-in{{end}}<textarea id="antigravity-oauth-callback-link" rows="3" placeholder='{{if eq .Lang "vi"}}Dán URL callback có code và state tại đây{{else}}Paste the callback URL containing code and state here{{end}}'></textarea></label>
+        <button type="button" class="btn-secondary js-complete-oauth-link" data-oauth-complete="/api/antigravity/oauth/complete" data-oauth-callback-link="antigravity-oauth-callback-link">{{tr .T "providers.complete_oauth"}}</button>
+      </div>
+      <div class="wide provider-result"></div>
+    </form>
+    {{with .AntigravityOAuth}}{{if .Status}}<div class="oauth-status-box"><span class="badge badge-info">{{.Status}}</span>{{if .ProviderID}}<span class="muted-text">Provider <code>{{.ProviderID}}</code></span>{{end}}{{if .AuthURL}}<a href="{{.AuthURL}}" target="_blank" rel="noreferrer">{{if eq $.Lang "vi"}}Mở trang xác thực Google{{else}}Open Google authorization{{end}}</a>{{end}}{{if .Email}}<span class="muted-text">{{.Email}}</span>{{end}}{{if .Error}}<p class="error-text">{{.Error}}</p>{{end}}</div>{{end}}{{end}}
+    <p><small>{{if eq .Lang "vi"}}Nếu port <code>1456</code> đang bận, hãy tắt OAuth flow khác rồi thử lại.{{else}}If port <code>1456</code> is busy, stop another OAuth flow and try again.{{end}}</small></p>
+  </article>
+</div>
+
+<div class="provider-modal {{if .EditProvider}}is-open{{end}}" id="apikey-provider-modal" aria-hidden="{{if .EditProvider}}false{{else}}true{{end}}" role="dialog" aria-modal="true" aria-labelledby="apikey-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head">
+      <div>
+        <p class="eyebrow">{{if .EditProvider}}{{if eq .EditProvider.Type "codex"}}{{if eq $.Lang "vi"}}Provider OAuth{{else}}OAuth Providers{{end}}{{else}}{{if eq $.Lang "vi"}}Provider API key{{else}}API Key Providers{{end}}{{end}}{{else}}{{if eq .Lang "vi"}}Provider API key{{else}}API Key Providers{{end}}{{end}}</p>
+        <h2 id="apikey-modal-title">{{if .EditProvider}}{{if eq $.Lang "vi"}}Sửa provider{{else}}Edit provider{{end}} <code>{{.EditProvider.ID}}</code>{{else}}{{if eq .Lang "vi"}}Thêm provider API key{{else}}Add API key provider{{end}}{{end}}</h2>
+      </div>
+      <button type="button" class="provider-modal-close" data-close-modal aria-label="Đóng">×</button>
+    </div>
+    <form method="post" class="provider-form-grid">
+      <label>ID<input name="id" placeholder="openai hoặc openrouter" value="{{with .EditProvider}}{{.ID}}{{end}}" {{if .EditProvider}}readonly{{end}} required></label>
+      <label>Type
+        <select name="type">
+          <option value="openai-compatible" {{with .EditProvider}}{{if eq .Type "openai-compatible"}}selected{{end}}{{end}}>openai-compatible</option>
+          <option value="codex" {{with .EditProvider}}{{if eq .Type "codex"}}selected{{end}}{{end}}>codex</option>
+          <option value="mimo-free" {{with .EditProvider}}{{if eq .Type "mimo-free"}}selected{{end}}{{end}}>mimo-free</option>
+          <option value="opencode" {{with .EditProvider}}{{if eq .Type "opencode"}}selected{{end}}{{end}}>opencode</option>
+          <option value="antigravity" {{with .EditProvider}}{{if eq .Type "antigravity"}}selected{{end}}{{end}}>antigravity</option>
+        </select>
+      </label>
+      <label>{{if eq .Lang "vi"}}Tên hiển thị{{else}}Name{{end}}<input name="name" placeholder="OpenAI Main" value="{{with .EditProvider}}{{.Name}}{{end}}"></label>
+      <label>Base URL<input name="base_url" placeholder="https://api.openai.com/v1" value="{{with .EditProvider}}{{.BaseURL}}{{end}}"></label>
+      <label>{{if eq .Lang "vi"}}API Key{{else}}API Key{{end}}<input name="api_key" type="password" placeholder='{{if .EditProvider}}{{if eq $.Lang "vi"}}để trống để giữ API key hiện tại{{else}}leave blank to keep current API key{{end}}{{else}}sk-...{{end}}'></label>
+      <label>{{if eq .Lang "vi"}}Access Token{{else}}Access Token{{end}}<input name="access_token" type="password" placeholder='{{if .EditProvider}}{{if eq $.Lang "vi"}}để trống để giữ access token{{else}}leave blank to keep access token{{end}}{{else}}{{if eq $.Lang "vi"}}Bearer token tùy chọn{{else}}Optional bearer token{{end}}{{end}}'></label>
+      <label>{{if eq .Lang "vi"}}Refresh Token{{else}}Refresh Token{{end}}<input name="refresh_token" type="password" placeholder='{{if .EditProvider}}{{if eq $.Lang "vi"}}để trống để giữ refresh token{{else}}leave blank to keep refresh token{{end}}{{else}}{{if eq $.Lang "vi"}}Refresh token tùy chọn{{else}}Optional refresh token{{end}}{{end}}'></label>
+      {{$provProxyID := ""}}
+      {{with .EditProvider}}{{$provProxyID = .ProxyID}}{{end}}
+      <label>Proxy Pool
+        <select name="proxy_id">
+          <option value="">-- {{if eq $.Lang "vi"}}Không dùng hoặc dùng Custom URL{{else}}None / Custom URL{{end}} --</option>
+          {{range $.Proxies}}
+            <option value="{{.ID}}" {{if eq .ID $provProxyID}}selected{{end}}>{{.Name}} ({{.ID}})</option>
+          {{end}}
+        </select>
+      </label>
+      <label>Proxy URL (Custom)<input name="proxy_url" data-proxy-input placeholder="http://user:pass@host:port hoặc socks5://user:pass@host:1080" value="{{with .EditProvider}}{{.ProxyURL}}{{end}}"></label>
+      <label class="wide">{{if eq .Lang "vi"}}Models{{else}}Models{{end}}<textarea name="models" placeholder="gpt-4.1, gpt-4o-mini hoặc cx/gpt-5.5">{{with .EditProvider}}{{range $i, $m := .Models}}{{if $i}}, {{end}}{{$m}}{{end}}{{end}}</textarea></label>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Nếu nhập proxy, mọi thao tác lấy models, test model và request chat của provider này sẽ dùng proxy riêng thay vì IP máy chính.{{else}}When a proxy is set, model fetches, model tests, and chat requests for this provider use that proxy instead of the host IP.{{end}}</p>
+      <label class="checkbox"><input name="enabled" type="checkbox" {{if .EditProvider}}{{if .EditProvider.Enabled}}checked{{end}}{{else}}checked{{end}}> {{if eq .Lang "vi"}}Đang bật{{else}}Enabled{{end}}</label>
+      <div class="form-actions wide">
+        <button type="button" class="btn-secondary js-test-proxy">{{tr .T "providers.proxy_test"}}</button>
+        <button type="submit">{{tr .T "common.save"}}</button>
+        {{if .EditProvider}}<a class="btn-secondary" href="/providers">{{tr .T "common.cancel"}}</a>{{end}}
+        <button type="button" class="btn-secondary" data-close-modal>{{tr .T "common.close"}}</button>
+      </div>
+      <div class="wide provider-result"></div>
+    </form>
+  </article>
+</div>
+
+{{template "layout_end" .}}

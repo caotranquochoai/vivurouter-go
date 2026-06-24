@@ -1,0 +1,122 @@
+{{template "layout_start" .}}
+<section class="providers-hero dashboard-hero-modern">
+  <div>
+    <p class="eyebrow">Model economics</p>
+    <h1>{{tr .T "pricing.title"}}</h1>
+    <p>{{tr .T "pricing.desc"}}</p>
+  </div>
+  <div class="dashboard-status-pill">
+    <span>{{tr .T "pricing.rules"}}</span>
+    <strong>{{len .Settings.ModelPrices}}</strong>
+  </div>
+</section>
+
+<form method="post" class="settings-modern-grid" id="pricing-form">
+  <section class="panel settings-card settings-card-wide pricing-manager">
+    <div class="section-title-row">
+      <div>
+        <p class="eyebrow">{{tr .T "pricing.step1"}}</p>
+        <h2>{{tr .T "pricing.pick_model"}}</h2>
+        <p>{{if eq .Lang "vi"}}Nhấn vào một model để mở popup với provider/model điền sẵn. Chọn nhiều model (Ctrl/Cmd + click) rồi nhấn "Đặt giá cho mục đã chọn" để set giá hàng loạt.{{else}}Click a model to open the form prefilled. Ctrl/Cmd + click to select several models, then "Configure selected" to price them in bulk.{{end}}</p>
+      </div>
+      <button type="button" class="btn-secondary js-configure-pricing-all" hidden>{{if eq .Lang "vi"}}Đặt giá cho tất cả mục đã chọn{{else}}Configure all selected{{end}} (<span data-pricing-all-selected-count>0</span>)</button>
+      <button type="button" class="provider-add-btn" data-open-modal="model-pricing-modal" title="{{tr .T "pricing.add_rule"}}">+</button>
+      <input class="combo-model-search pricing-model-search" type="search" id="pricing-model-filter" placeholder="{{if eq .Lang "vi"}}Tìm provider/model...{{else}}Search provider/model...{{end}}">
+    </div>
+    <div class="pricing-model-picker">
+      {{range .Providers}}{{if .Models}}{{$providerID := .ID}}
+      <article class="pricing-provider-block" data-pricing-provider-block="{{$providerID}}">
+        <div class="pricing-provider-head">
+          <strong>{{.ID}}</strong><span>{{.Type}}</span>
+          <button type="button" class="btn-secondary js-configure-pricing-bulk" data-pricing-provider="{{$providerID}}" hidden>{{if eq $.Lang "vi"}}Đặt giá cho mục đã chọn{{else}}Configure selected{{end}} (<span data-pricing-selected-count>0</span>)</button>
+        </div>
+        <div class="pricing-model-chip-list">
+          {{range .Models}}<button type="button" class="model-chip model-chip-action js-configure-pricing" data-pricing-provider="{{$providerID}}" data-pricing-model="{{.}}" title="{{.}}"><code title="{{.}}">{{.}}</code><span>{{tr $.T "pricing.configure"}}</span></button>{{end}}
+        </div>
+      </article>
+      {{end}}{{end}}
+    </div>
+  </section>
+
+  <section class="panel settings-card settings-card-wide pricing-manager">
+    <div class="section-title-row">
+      <div>
+        <p class="eyebrow">{{tr .T "pricing.step2"}}</p>
+        <h2>{{tr .T "pricing.saved_rules"}}</h2>
+        <p>{{if eq .Lang "vi"}}Giá tính theo USD / 1M tokens. Các rate limit bằng 0 hoặc bỏ trống nghĩa là không giới hạn.{{else}}Prices are in USD / 1M tokens. Rate limits set to 0 or left blank are unlimited.{{end}}</p>
+      </div>
+      <button type="button" class="btn-secondary" data-open-modal="model-pricing-modal">{{tr .T "pricing.add_rule"}}</button>
+    </div>
+    <textarea name="model_prices" id="model-prices-text" hidden>{{.ModelPricesText}}</textarea>
+    <div class="pricing-rule-grid pricing-rule-grid-friendly" id="pricing-rule-grid">
+      {{range .PricingGroups}}
+      <article class="pricing-rule-card" data-pricing-card>
+        <input type="hidden" data-pricing-field="provider" value="{{.ProviderID}}">
+        <input type="hidden" data-pricing-field="model" value="{{.Model}}">
+        <textarea hidden data-pricing-field="pairs">{{.PairsText}}</textarea>
+        <input type="hidden" data-pricing-field="input" value="{{printf "%.6f" .InputPer1M}}">
+        <input type="hidden" data-pricing-field="output" value="{{printf "%.6f" .OutputPer1M}}">
+        <input type="hidden" data-pricing-field="cached" value="{{printf "%.6f" .CachedInputPer1M}}">
+        <input type="hidden" data-pricing-field="reasoning" value="{{printf "%.6f" .ReasoningPer1M}}">
+        <input type="hidden" data-pricing-field="context" value="{{.ContextLength}}">
+        <input type="hidden" data-pricing-field="rpm" value="{{.RPM}}">
+        <input type="hidden" data-pricing-field="tpm" value="{{.TPM}}">
+        <input type="hidden" data-pricing-field="daily_requests" value="{{.DailyRequests}}">
+        <input type="hidden" data-pricing-field="daily_tokens" value="{{.DailyTokens}}">
+        <div class="api-key-card-head">
+          <div><span class="badge">Pricing{{if gt .Count 1}} × {{.Count}}{{end}}</span><h3>{{.ProviderID}} / {{.Model}}</h3></div>
+          <div class="inline-actions"><button type="button" class="btn-secondary js-edit-pricing">{{tr $.T "common.edit"}}</button><button type="submit" class="btn-danger js-remove-pricing">{{tr $.T "common.delete"}}</button></div>
+        </div>
+        <div class="api-key-limits pricing-friendly-limits">
+          <span><small>Input</small><strong>${{printf "%.4f" .InputPer1M}}</strong>/1M</span>
+          <span><small>Output</small><strong>${{printf "%.4f" .OutputPer1M}}</strong>/1M</span>
+          <span><small>Cached</small><strong>${{printf "%.4f" .CachedInputPer1M}}</strong>/1M</span>
+          <span><small>Reasoning</small><strong>${{printf "%.4f" .ReasoningPer1M}}</strong>/1M</span>
+          <span><small>Context</small><strong>{{if .ContextLength}}{{.ContextLength}}{{else}}auto{{end}}</strong></span>
+          <span><small>RPM</small><strong>{{if .RPM}}{{.RPM}}{{else}}∞{{end}}</strong></span>
+          <span><small>TPM</small><strong>{{if .TPM}}{{.TPM}}{{else}}∞{{end}}</strong></span>
+          <span><small>Req/day</small><strong>{{if .DailyRequests}}{{.DailyRequests}}{{else}}∞{{end}}</strong></span>
+          <span><small>Token/day</small><strong>{{if .DailyTokens}}{{.DailyTokens}}{{else}}∞{{end}}</strong></span>
+        </div>
+      </article>
+      {{else}}
+      <article class="api-key-empty" id="pricing-empty-state"><h3>{{tr .T "pricing.empty"}}</h3><p>{{tr .T "pricing.desc"}}</p></article>
+      {{end}}
+    </div>
+  </section>
+
+  <div class="settings-submit-bar">
+    <button type="submit">{{tr .T "pricing.save"}}</button>
+  </div>
+</form>
+
+<div class="provider-modal" id="model-pricing-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="model-pricing-title">
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head">
+      <div>
+        <p class="eyebrow">Pricing & rate limit</p>
+        <h2 id="model-pricing-title">{{tr .T "pricing.modal_title"}}</h2>
+      </div>
+      <button type="button" class="icon-btn" data-close-modal>×</button>
+    </div>
+    <div class="provider-form-grid" id="model-pricing-form">
+      <label>Provider(s)<input data-new-pricing="provider" placeholder="codex-1, codex-2, openai"></label>
+      <label>Model(s)<input data-new-pricing="model" placeholder="gpt-4.1, cx/gpt-5.5"></label>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Có thể nhập một hoặc nhiều provider và model, cách nhau bằng dấu phẩy. Ví dụ nhiều account Codex dùng cùng model: provider = codex-1, codex-2; model = gpt-5. Khi lưu sẽ tạo/cập nhật giá cho mọi cặp provider × model.{{else}}Enter one or more providers and models separated by commas. Example for multiple Codex accounts sharing a model: provider = codex-1, codex-2; model = gpt-5. Saving creates/updates every provider × model pair.{{end}}</p>
+      <label>Input USD / 1M<input data-new-pricing="input" type="number" min="0" step="0.000001" placeholder="0"></label>
+      <label>Output USD / 1M<input data-new-pricing="output" type="number" min="0" step="0.000001" placeholder="0"></label>
+      <label>Cached input USD / 1M<input data-new-pricing="cached" type="number" min="0" step="0.000001" placeholder="0"></label>
+      <label>Reasoning USD / 1M<input data-new-pricing="reasoning" type="number" min="0" step="0.000001" placeholder="0"></label>
+      <label>Context window<input data-new-pricing="context" type="number" min="0" placeholder="0 = auto/default"></label>
+      <label>RPM<input data-new-pricing="rpm" type="number" min="0" placeholder="0 = unlimited"></label>
+      <label>TPM<input data-new-pricing="tpm" type="number" min="0" placeholder="0 = unlimited"></label>
+      <label>Daily requests<input data-new-pricing="daily_requests" type="number" min="0" placeholder="0 = unlimited"></label>
+      <label>Daily tokens<input data-new-pricing="daily_tokens" type="number" min="0" placeholder="0 = unlimited"></label>
+      <div class="form-actions wide">
+        <button type="button" class="btn-secondary" data-close-modal>{{tr .T "common.cancel"}}</button>
+        <button type="submit" class="js-add-model-pricing">{{tr .T "pricing.save_rule"}}</button>
+      </div>
+    </div>
+  </article>
+</div>
+{{template "layout_end" .}}

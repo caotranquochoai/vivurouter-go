@@ -1,0 +1,216 @@
+{{template "layout_start" .}}
+<section class="dashboard-hero-modern analytics-hero-integrated">
+  <div>
+    <p class="eyebrow">{{tr .T "dashboard.eyebrow"}}</p>
+    <h1>{{tr .T "dashboard.title"}}</h1>
+    <p>{{.Settings.DashboardMessage}}</p>
+  </div>
+  <div class="dashboard-status-pill">
+    <span>{{if .Settings.RequireAPIKey}}{{tr .T "dashboard.protected"}}{{else}}{{tr .T "dashboard.open_local"}}{{end}}</span>
+    <strong>{{.Config.Host}}:{{.Config.Port}}</strong>
+  </div>
+</section>
+
+{{if .Budget.Alert}}
+<div class="budget-alert-banner {{if or (eq .Budget.DailyLevel "over") (eq .Budget.MonthlyLevel "over")}}is-over{{end}}" role="alert">
+  <strong>{{tr .T "budget.alert_title"}}</strong>
+  <span>
+    {{if .Budget.DailyLevel}}{{tr .T "budget.daily"}}: ${{fmtCost .Budget.DailySpentUSD}} / ${{fmtCost .Budget.DailyBudgetUSD}} ({{printf "%.0f" .Budget.DailyPct}}%){{end}}
+    {{if and .Budget.DailyLevel .Budget.MonthlyLevel}} · {{end}}
+    {{if .Budget.MonthlyLevel}}{{tr .T "budget.monthly"}}: ${{fmtCost .Budget.MonthlySpentUSD}} / ${{fmtCost .Budget.MonthlyBudgetUSD}} ({{printf "%.0f" .Budget.MonthlyPct}}%){{end}}
+  </span>
+  <a class="btn-secondary" href="/settings#budget">{{tr .T "budget.manage"}}</a>
+</div>
+{{end}}
+
+<div class="analytics-toolbar-integrated">
+  <div class="analytics-tabs-integrated" aria-label="Usage views">
+    <a class="active" href="/dashboard">{{tr .T "dashboard.overview"}}</a>
+    <a href="/requests">{{tr .T "dashboard.details"}}</a>
+  </div>
+  <div class="analytics-range-integrated" id="usage-range-tabs" aria-label="Time range">
+    <span data-range="today">Today</span>
+    <span class="active" data-range="24h">24h</span>
+    <span data-range="7d">7D</span>
+    <span data-range="30d">30D</span>
+  </div>
+</div>
+
+<section class="analytics-kpi-grid-integrated" id="dashboard-kpi-grid">
+  <article class="kpi-card accent-cyan"><span>{{tr .T "dashboard.total_requests"}}</span><strong data-kpi="requests" title="{{fmtTokens .Metrics.TotalRequests}}">{{fmtTokensShort .Metrics.TotalRequests}}</strong><small><b data-kpi="in_flight">{{.Metrics.InFlight}}</b> {{tr .T "dashboard.in_flight"}}</small></article>
+  <article class="kpi-card accent-orange"><span>{{tr .T "dashboard.input_tokens"}}</span><strong data-kpi="prompt_tokens" title="{{fmtTokens .Usage.PromptTokens}}">{{fmtTokensShort .Usage.PromptTokens}}</strong><small><b data-kpi="estimated">{{.Usage.Estimated}}</b> {{tr .T "dashboard.estimated_logs"}}</small></article>
+  <article class="kpi-card accent-green"><span>{{tr .T "dashboard.output_tokens"}}</span><strong data-kpi="completion_tokens" title="{{fmtTokens .Usage.CompletionTokens}}">{{fmtTokensShort .Usage.CompletionTokens}}</strong><small data-kpi-title="total_tokens" title="{{fmtTokens .Usage.TotalTokens}}"><b data-kpi="total_tokens">{{fmtTokensShort .Usage.TotalTokens}}</b> {{tr .T "dashboard.total_tokens"}}</small></article>
+  <article class="kpi-card accent-purple"><span>{{tr .T "dashboard.est_cost"}}</span><strong data-kpi="cost_usd">${{fmtCost .Usage.CostUSD}}</strong><small title="{{.CostNote}}">{{tr .T "dashboard.cost_note"}}</small></article>
+</section>
+
+<section class="panel usage-chart-panel" id="usage-chart-panel">
+  <div class="section-title-row compact">
+    <div>
+      <p class="eyebrow">{{tr .T "chart.eyebrow"}}</p>
+      <h2 id="usage-chart-title">{{tr .T "chart.title"}}</h2>
+    </div>
+    <div class="usage-metric-tabs" id="usage-metric-tabs" aria-label="Metric">
+      <span class="active" data-metric="cost">{{tr .T "chart.metric_cost"}}</span>
+      <span data-metric="total_tokens">{{tr .T "chart.metric_tokens"}}</span>
+      <span data-metric="requests">{{tr .T "chart.metric_requests"}}</span>
+    </div>
+  </div>
+  <div class="usage-chart-wrap">
+    <canvas id="usage-chart-canvas" height="220" aria-label="Usage time series"></canvas>
+    <div class="usage-chart-tooltip" id="usage-chart-tooltip" hidden></div>
+  </div>
+  <p class="muted-text usage-chart-empty" id="usage-chart-empty" hidden>{{tr .T "chart.empty"}}</p>
+</section>
+<script>window.VivuRouterUsageSeries={{json .UsageSeries}};</script>
+
+<section class="panel usage-stats-table-panel" id="usage-stats-table-panel">
+  <div class="section-title-row compact">
+    <div class="stats-table-filter-wrap">
+      <select id="usage-stats-group-select" class="usage-stats-select" aria-label="Group by">
+        <option value="model" selected>Usage by Model</option>
+        <option value="account">Usage by Account</option>
+        <option value="api_key">Usage by API Key</option>
+        <option value="endpoint">Usage by Endpoint</option>
+      </select>
+    </div>
+    <div class="usage-metric-tabs" id="usage-stats-metric-tabs" aria-label="Toggle metric">
+      <span class="active" data-metric="cost">Costs</span>
+      <span data-metric="tokens">Tokens</span>
+    </div>
+  </div>
+
+  <div class="usage-stats-table-wrap">
+    <table class="usage-stats-table" id="usage-stats-table">
+      <thead>
+        <tr id="usage-stats-header-row">
+          <!-- Headers generated by JS -->
+        </tr>
+      </thead>
+      <tbody id="usage-stats-table-body">
+        <!-- Rendered dynamically by JS -->
+      </tbody>
+    </table>
+  </div>
+  <p class="muted-text usage-stats-empty" id="usage-stats-empty" style="text-align: center; padding: 2rem 0;" hidden>No usage data available.</p>
+</section>
+<script>window.VivuRouterUsageTable={{json .UsageTable}};</script>
+
+<section class="dashboard-modern-grid analytics-main-integrated">
+  <article class="panel dashboard-panel-main analytics-flow-panel">
+    <div class="section-title-row">
+      <div>
+        <p class="eyebrow">{{tr .T "dashboard.flow"}}</p>
+        <h2>{{tr .T "dashboard.provider_overview"}}</h2>
+      </div>
+      <a class="btn-secondary" href="/providers">{{tr .T "dashboard.manage_providers"}}</a>
+    </div>
+    <div class="analytics-flow-grid">
+      <div class="flow-node primary"><span>VR</span><strong>{{tr .T "app.name"}}</strong><small>{{tr .T "dashboard.local_gateway"}}</small></div>
+      <div class="flow-stat"><span>{{tr .T "dashboard.providers"}}</span><strong>{{.ProviderSummary.Enabled}}/{{.ProviderSummary.Total}}</strong><small>{{.ProviderSummary.InCooldown}} cooldown</small></div>
+      <div class="flow-stat"><span>{{tr .T "dashboard.default"}}</span><strong>{{.Settings.DefaultProvider}}</strong><small>Codex: {{if .Settings.DefaultCodexID}}{{.Settings.DefaultCodexID}}{{else}}unset{{end}}</small></div>
+      <div class="flow-stat"><span>{{tr .T "dashboard.pricing_rules"}}</span><strong>{{len .Settings.ModelPrices}}</strong><small>custom model prices</small></div>
+      <div class="flow-stat"><span>{{tr .T "dashboard.api_keys"}}</span><strong>{{len .Settings.APIKeys}}</strong><small>quota policies</small></div>
+    </div>
+    <div class="usage-modern-grid analytics-token-strip">
+      <div><span>{{tr .T "dashboard.input"}}</span><strong data-kpi="strip_prompt_tokens" title="{{fmtTokens .Usage.PromptTokens}}">{{fmtTokensShort .Usage.PromptTokens}}</strong></div>
+      <div><span>{{tr .T "dashboard.output"}}</span><strong data-kpi="strip_completion_tokens" title="{{fmtTokens .Usage.CompletionTokens}}">{{fmtTokensShort .Usage.CompletionTokens}}</strong></div>
+      <div><span>{{tr .T "dashboard.cached"}}</span><strong data-kpi="strip_cached_tokens" title="{{fmtTokens .Usage.CachedTokens}}">{{fmtTokensShort .Usage.CachedTokens}}</strong></div>
+      <div><span>{{tr .T "dashboard.reasoning"}}</span><strong data-kpi="strip_reasoning_tokens" title="{{fmtTokens .Usage.ReasoningTokens}}">{{fmtTokensShort .Usage.ReasoningTokens}}</strong></div>
+    </div>
+    <div class="usage-modern-grid analytics-token-strip optimization-strip">
+      <div><span>Upstream saved</span><strong title="{{fmtTokens .Usage.UpstreamSaved}}">{{fmtTokensShort .Usage.UpstreamSaved}}</strong></div>
+      <div><span>Debug saved</span><strong title="{{fmtTokens .Usage.DebugSaved}}">{{fmtTokensShort .Usage.DebugSaved}}</strong></div>
+      <div><span>Optimize time</span><strong>{{.Usage.OptimizeDurationMS}}ms</strong></div>
+      <div><span>Debug log time</span><strong>{{.Usage.DebugLogDurationMS}}ms</strong></div>
+    </div>
+  </article>
+
+  <article class="panel dashboard-panel-side analytics-recent-panel">
+    <div class="section-title-row compact">
+      <div>
+        <p class="eyebrow">{{tr .T "dashboard.recent_requests"}}</p>
+        <h2>{{tr .T "dashboard.recent_requests"}}</h2>
+      </div>
+      <a class="btn-secondary" href="/requests">{{tr .T "dashboard.details"}}</a>
+    </div>
+    <div class="analytics-request-list" id="dashboard-recent-requests" data-empty-text="{{tr .T "dashboard.no_requests"}}">
+      {{range .Requests}}
+      <div class="analytics-request-row">
+        <code>{{.Model}}</code>
+        <span><b class="tok-in">{{fmtTokens .PromptTokens}}↑</b> <b class="tok-out">{{fmtTokens .CompletionTokens}}↓</b></span>
+        <time>{{relativeTime .Timestamp}}</time>
+      </div>
+      {{else}}
+      <p class="muted-text">{{tr .T "dashboard.no_requests"}}</p>
+      {{end}}
+    </div>
+  </article>
+</section>
+
+{{if .Budget.HasBudget}}
+<section class="panel budget-panel" id="budget-panel">
+  <div class="section-title-row compact">
+    <div>
+      <p class="eyebrow">{{tr .T "budget.eyebrow"}}</p>
+      <h2>{{tr .T "budget.title"}}</h2>
+    </div>
+    <a class="btn-secondary" href="/settings#budget">{{tr .T "budget.manage"}}</a>
+  </div>
+  <div class="budget-grid">
+    {{if gt .Budget.DailyBudgetUSD 0.0}}
+    <div class="budget-item budget-level-{{if .Budget.DailyLevel}}{{.Budget.DailyLevel}}{{else}}ok{{end}}">
+      <div class="budget-item-head"><span>{{tr .T "budget.daily"}}</span><strong>${{fmtCost .Budget.DailySpentUSD}} / ${{fmtCost .Budget.DailyBudgetUSD}}</strong></div>
+      <div class="budget-bar"><span class="budget-bar-fill" data-pct="{{printf "%.1f" .Budget.DailyPct}}"></span></div>
+      <small>{{printf "%.0f" .Budget.DailyPct}}% {{tr .T "budget.used"}}</small>
+    </div>
+    {{end}}
+    {{if gt .Budget.MonthlyBudgetUSD 0.0}}
+    <div class="budget-item budget-level-{{if .Budget.MonthlyLevel}}{{.Budget.MonthlyLevel}}{{else}}ok{{end}}">
+      <div class="budget-item-head"><span>{{tr .T "budget.monthly"}}</span><strong>${{fmtCost .Budget.MonthlySpentUSD}} / ${{fmtCost .Budget.MonthlyBudgetUSD}}</strong></div>
+      <div class="budget-bar"><span class="budget-bar-fill" data-pct="{{printf "%.1f" .Budget.MonthlyPct}}"></span></div>
+      <small>{{printf "%.0f" .Budget.MonthlyPct}}% {{tr .T "budget.used"}}</small>
+    </div>
+    {{end}}
+  </div>
+  <p class="muted-text budget-foot">{{tr .T "budget.alert_at"}} {{.Budget.AlertThreshold}}%</p>
+</section>
+{{end}}
+
+<section class="dashboard-modern-grid analytics-secondary-integrated">
+  <article class="panel dashboard-panel-side">
+    <p class="eyebrow">{{tr .T "dashboard.api_keys"}}</p>
+    <h2>{{tr .T "dashboard.quota_status"}}</h2>
+    {{range .Settings.APIKeys}}
+      <div class="quota-mini-row">
+        <strong>{{.ID}}</strong>
+        <span>{{fmtTokens .UsedRequests}}/{{if .MaxRequests}}{{fmtTokens .MaxRequests}}{{else}}∞{{end}} rq</span>
+        <span>${{printf "%.4f" .UsedCostUSD}}/{{if .MaxCostUSD}}${{printf "%.2f" .MaxCostUSD}}{{else}}∞{{end}}</span>
+      </div>
+    {{else}}
+      <p>{{tr .T "dashboard.no_api_quota"}}</p>
+    {{end}}
+    <a class="btn-secondary" href="/settings">{{tr .T "dashboard.manage_keys_pricing"}}</a>
+  </article>
+
+  <article class="panel dashboard-panel-side">
+    <p class="eyebrow">{{tr .T "dashboard.runtime"}}</p>
+    <h2>{{tr .T "dashboard.upstream_health"}}</h2>
+    <p>{{tr .T "dashboard.upstream_errors"}}: <strong>{{.Metrics.UpstreamFails}}</strong></p>
+    <p>{{tr .T "dashboard.uptime"}}: <code>{{.UptimeLabel}}</code></p>
+    {{if .Cooldowns}}
+      {{range .Cooldowns}}<p><code>{{.ProviderID}}</code> {{if eq $.Lang "vi"}}còn{{else}}remaining{{end}} {{.RemainingMS}}ms <small>({{.Reason}})</small></p>{{end}}
+    {{else}}
+      <p>{{tr .T "dashboard.no_cooldowns"}}</p>
+    {{end}}
+  </article>
+
+  <article class="panel dashboard-panel-side">
+    <p class="eyebrow">{{tr .T "dashboard.quick_endpoints"}}</p>
+    <h2>{{tr .T "dashboard.sample_endpoint"}}</h2>
+    <pre><code>GET  /v1/models
+POST /v1/chat/completions
+POST /v1/responses
+GET  /api/usage/stats</code></pre>
+  </article>
+</section>
+{{template "layout_end" .}}
