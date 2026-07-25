@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/local/vivurouter-go/internal/store"
 )
 
 func TestBuildAuthURLMatchesCodexCLIShape(t *testing.T) {
@@ -72,13 +74,7 @@ func TestExchangeTokenPostsCodexForm(t *testing.T) {
 		}
 		seenForm = r.PostForm
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(tokenResponse{
-			AccessToken:  "access-token",
-			RefreshToken: "refresh-token",
-			IDToken:      "id-token",
-			ExpiresIn:    3600,
-			Scope:        Scope,
-		})
+		_ = json.NewEncoder(w).Encode(tokenResponse{AccessToken: "access-token", RefreshToken: "refresh-token", IDToken: "id-token", ExpiresIn: 3600, Scope: Scope})
 	}))
 	defer server.Close()
 
@@ -91,16 +87,62 @@ func TestExchangeTokenPostsCodexForm(t *testing.T) {
 		t.Fatalf("unexpected tokens: %+v", tokens)
 	}
 
-	want := map[string]string{
-		"grant_type":    "authorization_code",
-		"client_id":     ClientID,
-		"code":          "code-abc",
-		"redirect_uri":  RedirectURI,
-		"code_verifier": "verifier-xyz",
-	}
+	want := map[string]string{"grant_type": "authorization_code", "client_id": ClientID, "code": "code-abc", "redirect_uri": RedirectURI, "code_verifier": "verifier-xyz"}
 	for key, expected := range want {
 		if got := seenForm.Get(key); got != expected {
 			t.Fatalf("form %s = %q, want %q", key, got, expected)
 		}
+	}
+}
+
+func TestStartRejectsAccountFromAnotherProvider(t *testing.T) {
+	st, err := store.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	if err := st.UpsertProvider(store.Provider{ID: "codex-a", Type: store.ProviderCodex, Enabled: true}); err != nil {
+		t.Fatalf("save provider: %v", err)
+	}
+	if err := st.UpsertProvider(store.Provider{ID: "codex-b", Type: store.ProviderCodex, Enabled: true}); err != nil {
+		t.Fatalf("save provider: %v", err)
+	}
+	if err := st.UpsertProviderAccount(store.ProviderAccount{ID: "account-b", ProviderID: "codex-b", Name: "Account B", Enabled: true}); err != nil {
+		t.Fatalf("save account: %v", err)
+	}
+	if _, err := NewManager(st).Start("codex-a", "account-b", ""); err == nil {
+		t.Fatal("expected cross-provider account to be rejected")
+	}
+}
+
+func TestSaveTokensTargetsProviderAccount(t *testing.T) {
+	st, err := store.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	provider := store.Provider{ID: "codex", Type: store.ProviderCodex, Enabled: true}
+	if err := st.UpsertProvider(provider); err != nil {
+		t.Fatalf("save provider: %v", err)
+	}
+	account := store.ProviderAccount{ID: "account-a", ProviderID: provider.ID, Name: "Account A", AuthType: "oauth", AccessToken: "old-access", RefreshToken: "old-refresh", Enabled: true}
+	if err := st.UpsertProviderAccount(account); err != nil {
+		t.Fatalf("save account: %v", err)
+	}
+	manager := NewManager(st)
+	if err := manager.saveTokens(provider.ID, account.ID, "http://proxy.example:8080", tokenResponse{AccessToken: "new-access", RefreshToken: "new-refresh"}); err != nil {
+		t.Fatalf("save account tokens: %v", err)
+	}
+	got, found, err := st.GetProviderAccount(account.ID)
+	if err != nil || !found {
+		t.Fatalf("get account found=%v err=%v", found, err)
+	}
+	if got.AccessToken != "new-access" || got.RefreshToken != "new-refresh" || got.ProxyURL != "http://proxy.example:8080" || !got.Enabled {
+		t.Fatalf("account was not updated: %+v", got)
+	}
+	storedProvider, found, err := st.GetProvider(provider.ID)
+	if err != nil || !found {
+		t.Fatalf("get provider found=%v err=%v", found, err)
+	}
+	if storedProvider.AccessToken != "" || storedProvider.RefreshToken != "" {
+		t.Fatalf("account OAuth must not change provider fallback: %+v", storedProvider)
 	}
 }

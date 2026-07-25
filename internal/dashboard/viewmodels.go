@@ -8,19 +8,38 @@ import (
 	"github.com/local/vivurouter-go/internal/store"
 )
 
+type chatStudioModel struct {
+	Value string
+	Label string
+	Group string
+}
+
 type codexQuotaSeed struct {
 	ProviderID string `json:"provider_id"`
+}
+
+type dashboardAPIKeySummary struct {
+	Total           int
+	Active          int
+	Requests        int
+	CostUSD         float64
+	HasRequestLimit bool
+	RequestLimit    int
+	HasCostLimit    bool
+	CostLimitUSD    float64
 }
 
 type pageData struct {
 	Title               string
 	Lang                string
+	ActivePath          string
 	T                   map[string]string
 	Now                 time.Time
 	Config              config.Config
 	Settings            store.Settings
 	Providers           []store.Provider
 	Proxies             []store.Proxy
+	Invoices            []store.Invoice
 	ProxyCards          []proxyCard
 	ProxySummary        proxySummary
 	ProviderSummary     providerSummary
@@ -46,7 +65,9 @@ type pageData struct {
 	CombosText          string
 	PromptRoutersText   string
 	FusionsText         string
+	GuardrailsText      string
 	AvailableModels     []comboModelOption
+	ChatModels          []chatStudioModel
 	RequestTotal        int
 	RequestShown        int
 	RequestPage         int
@@ -59,6 +80,7 @@ type pageData struct {
 	CostNote            string
 	Budget              BudgetStatus
 	UsageSeries         UsageSeries
+	APIKeySummary       dashboardAPIKeySummary
 }
 
 type requestLogView struct {
@@ -161,8 +183,11 @@ type providerCard struct {
 	SecretLabel       string
 	SecretClass       string
 	Models            []string
+	HiddenModelNames  []string
 	VisibleModels     []providerModelUsage
+	ExtraModels       []providerModelUsage
 	HiddenModels      []providerModelUsage
+	ExtraModelCount   int
 	HiddenModelCount  int
 	ModelCount        int
 	RequestCount      int
@@ -185,6 +210,7 @@ type providerCard struct {
 	KeyStrategy       string
 	StickyLimit       int
 	Keys              []store.ProviderKey
+	AccountCount      int
 	CapabilityBadges  []providerCapabilityBadge
 }
 

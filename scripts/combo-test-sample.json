@@ -1,0 +1,11 @@
+{
+  "model": "combo-test",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Reply with exactly COMBO_SMALL_OK"
+    }
+  ],
+  "stream": false,
+  "max_tokens": 32
+}

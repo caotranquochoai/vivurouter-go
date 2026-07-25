@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -24,7 +26,27 @@ func main() {
 	}
 	defer closeStore()
 
-	warnIfInsecure(cfg, st)
+	if settings, err := st.GetSettings(); err != nil {
+		log.Fatalf("load settings: %v", err)
+	} else {
+		if strings.TrimSpace(settings.BindHost) != "" {
+			if settings.BindHost != "127.0.0.1" && settings.BindHost != "0.0.0.0" {
+				log.Fatalf("invalid persisted bind host %q", settings.BindHost)
+			}
+			cfg.Host = settings.BindHost
+		}
+		if strings.TrimSpace(settings.BindPort) != "" {
+			port, err := strconv.Atoi(settings.BindPort)
+			if err != nil || port < 1 || port > 65535 {
+				log.Fatalf("invalid persisted bind port %q", settings.BindPort)
+			}
+			cfg.Port = strconv.Itoa(port)
+		}
+	}
+
+	if err := validateStartupSecurity(cfg, st); err != nil {
+		log.Fatalf("invalid deployment security: %v", err)
+	}
 
 	server, err := app.NewServer(cfg, st)
 	if err != nil {
@@ -57,27 +79,44 @@ func main() {
 	}
 }
 
-// warnIfInsecure prints a loud warning when the server is exposed beyond
-// localhost without either the gateway API key requirement or admin passcode
-// protection enabled, since that leaves management endpoints open.
-func warnIfInsecure(cfg config.Config, st store.Store) {
-	host := strings.TrimSpace(cfg.Host)
-	loopbackBind := host == "" || host == "127.0.0.1" || host == "::1" || strings.EqualFold(host, "localhost")
-	if loopbackBind {
-		return
+// validateStartupSecurity makes network exposure an explicit operator decision.
+// Local loopback operation remains backward-compatible; private and public
+// modes require both gateway and dashboard protection unless the narrowly
+// scoped migration override is deliberately enabled.
+func validateStartupSecurity(cfg config.Config, st store.Store) error {
+	if err := cfg.ValidateDeploymentMode(); err != nil {
+		return err
+	}
+	if cfg.AllowInsecureNonLoopback && !cfg.IsLoopbackBind() {
+		log.Printf("SECURITY WARNING: ALLOW_INSECURE_NON_LOOPBACK=true bypasses deployment protection for %s", cfg.Addr())
+		return nil
+	}
+	mode := cfg.EffectiveDeploymentMode()
+	if mode == config.DeploymentLocal {
+		return nil
 	}
 	settings, err := st.GetSettings()
-	adminProtected := err == nil && settings.AdminSecurityEnabled && strings.TrimSpace(settings.AdminPasscode) != ""
-	gatewayProtected := cfg.RequireAPIKey || (err == nil && settings.RequireAPIKey)
+	if err != nil {
+		return fmt.Errorf("load settings for deployment validation: %w", err)
+	}
+	adminProtected := settings.AdminSecurityEnabled && strings.TrimSpace(settings.AdminPasscode) != ""
+	gatewayProtected := cfg.RequireAPIKey || settings.RequireAPIKey
 	if !adminProtected {
-		log.Printf("SECURITY WARNING: bound to %s but admin passcode protection is OFF — dashboard and /api/* management endpoints are exposed. Enable admin security in settings.", cfg.Addr())
+		return fmt.Errorf("DEPLOYMENT_MODE=%s requires admin security with a non-empty passcode", mode)
 	}
 	if !gatewayProtected {
-		log.Printf("SECURITY WARNING: bound to %s but REQUIRE_API_KEY is OFF — the /v1 gateway is an open proxy to your provider credentials.", cfg.Addr())
+		return fmt.Errorf("DEPLOYMENT_MODE=%s requires REQUIRE_API_KEY=true or persisted gateway API-key enforcement", mode)
 	}
+	if mode == config.DeploymentPublic && len(cfg.GatewayCORSOrigins) == 0 {
+		return fmt.Errorf("DEPLOYMENT_MODE=public requires GATEWAY_CORS_ORIGINS")
+	}
+	return nil
 }
 
-// openStore selects the persistence backend and returns a close function.
+// openStore selects the persistence backend and returns a close function. The
+// backend is wrapped in an AsyncLogStore so request-log writes happen off the
+// gateway's response path; the close function flushes any buffered logs (and
+// closes the underlying store) during graceful shutdown so nothing is lost.
 func openStore(cfg config.Config) (store.Store, func(), error) {
 	switch strings.ToLower(strings.TrimSpace(cfg.StoreBackend)) {
 	case "sqlite":
@@ -85,12 +124,14 @@ func openStore(cfg config.Config) (store.Store, func(), error) {
 		if err != nil {
 			return nil, func() {}, err
 		}
-		return st, func() { _ = st.Close() }, nil
+		async := store.NewAsyncLogStore(st, 0)
+		return async, func() { _ = async.Close() }, nil
 	default:
 		st, err := store.NewFileStore(cfg.DataDir)
 		if err != nil {
 			return nil, func() {}, err
 		}
-		return st, func() {}, nil
+		async := store.NewAsyncLogStore(st, 0)
+		return async, func() { async.Flush() }, nil
 	}
 }

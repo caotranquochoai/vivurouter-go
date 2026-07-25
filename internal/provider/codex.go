@@ -32,6 +32,12 @@ type CodexExecutor struct {
 }
 
 func (e *CodexExecutor) ExecuteResponses(ctx context.Context, provider store.Provider, model string, body map[string]any) (*ExecuteResult, error) {
+	return e.ExecuteResponsesForAccount(ctx, provider, model, body, "")
+}
+
+// ExecuteResponsesForAccount executes using an account-expanded provider. When
+// accountID is set, any OAuth token rotation is persisted only to that account.
+func (e *CodexExecutor) ExecuteResponsesForAccount(ctx context.Context, provider store.Provider, model string, body map[string]any, accountID string) (*ExecuteResult, error) {
 	transformed := normalizeCodexBody(provider, model, body)
 	result, err := e.executeResponsesOnce(ctx, provider, transformed)
 	if err != nil || result.Response == nil || !isCodexAuthFailure(result.Response.StatusCode) || strings.TrimSpace(provider.RefreshToken) == "" || e.Store == nil {
@@ -39,7 +45,7 @@ func (e *CodexExecutor) ExecuteResponses(ctx context.Context, provider store.Pro
 	}
 
 	_ = result.Response.Body.Close()
-	refreshed, refreshErr := e.RefreshCodexToken(ctx, provider)
+	refreshed, refreshErr := e.RefreshCodexTokenForAccount(ctx, provider, accountID)
 	if refreshErr != nil {
 		return nil, refreshErr
 	}
@@ -86,6 +92,13 @@ func (e *CodexExecutor) executeResponsesOnce(ctx context.Context, provider store
 }
 
 func (e *CodexExecutor) RefreshCodexToken(ctx context.Context, provider store.Provider) (store.Provider, error) {
+	return e.RefreshCodexTokenForAccount(ctx, provider, "")
+}
+
+// RefreshCodexTokenForAccount rotates a Codex OAuth token. Account-expanded
+// candidates must pass their account ID so one account cannot overwrite the
+// provider-level fallback credential or another account's token.
+func (e *CodexExecutor) RefreshCodexTokenForAccount(ctx context.Context, provider store.Provider, accountID string) (store.Provider, error) {
 	if strings.TrimSpace(provider.RefreshToken) == "" {
 		return provider, fmt.Errorf("provider %s has no Codex refresh token", provider.ID)
 	}
@@ -131,7 +144,23 @@ func (e *CodexExecutor) RefreshCodexToken(ctx context.Context, provider store.Pr
 		provider.RefreshToken = payload.RefreshToken
 	}
 	if e.Store != nil {
-		if err := e.Store.UpsertProvider(provider); err != nil {
+		if accountID != "" {
+			account, found, err := e.Store.GetProviderAccount(accountID)
+			if err != nil {
+				return provider, err
+			}
+			if !found {
+				return provider, fmt.Errorf("Codex account %q not found", accountID)
+			}
+			if account.ProviderID != provider.ID {
+				return provider, fmt.Errorf("Codex account %q belongs to provider %q", accountID, account.ProviderID)
+			}
+			account.AccessToken = provider.AccessToken
+			account.RefreshToken = provider.RefreshToken
+			if err := e.Store.UpsertProviderAccount(account); err != nil {
+				return provider, err
+			}
+		} else if err := e.Store.UpsertProvider(provider); err != nil {
 			return provider, err
 		}
 	}

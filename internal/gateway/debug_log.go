@@ -16,6 +16,16 @@ var debugSecretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\b(ghp_|github_pat_)[A-Za-z0-9_\-]{12,}\b`),
 }
 
+var maxDebugPayloadBytes = 4 * 1024 * 1024
+
+// SetDebugPayloadLimit applies a process-wide upper bound to persisted debug
+// payloads, even when a dashboard setting requests a larger value.
+func SetDebugPayloadLimit(limit int64) {
+	if limit > 0 && limit <= int64(^uint(0)>>1) {
+		maxDebugPayloadBytes = int(limit)
+	}
+}
+
 func maskedAPIKeyParts(key string) (string, string, string) {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -40,13 +50,16 @@ func maskedAPIKeyParts(key string) (string, string, string) {
 	return prefix, suffix, prefix + "-***-***" + suffix
 }
 
-func buildDebugPayload(settings store.Settings, body map[string]any) *store.RequestLogDebugPayload {
-	if body == nil || (!settings.SaveRawPrompt && !settings.SaveRawToolResult) {
+func buildDebugPayload(settings store.Settings, body map[string]any, rawResponse string) *store.RequestLogDebugPayload {
+	if body == nil || (!settings.SaveRawPrompt && !settings.SaveRawToolResult && !settings.SaveRawResponse) {
 		return nil
 	}
 	limit := settings.MaxDebugPayloadBytes
 	if limit <= 0 {
 		limit = 128 * 1024
+	}
+	if limit > maxDebugPayloadBytes {
+		limit = maxDebugPayloadBytes
 	}
 	// Always redact secrets from stored debug payloads. The payload is persisted
 	// and served back via the debug API, so leaking auth headers/keys here would
@@ -68,7 +81,15 @@ func buildDebugPayload(settings store.Settings, body map[string]any) *store.Requ
 			applyCompactDebugToolResult(payload, raw, limit)
 		}
 	}
-	if payload.RawPrompt == "" && payload.RawToolResult == "" {
+	if settings.SaveRawResponse && strings.TrimSpace(rawResponse) != "" {
+		raw := redactDebugSecrets(rawResponse)
+		payload.RawResponseBytes = len(raw)
+		payload.RawResponse, payload.RawResponseTruncated = truncateDebugString(raw, limit)
+		if settings.CompactDebugPayloads {
+			applyCompactDebugResponse(payload, raw, limit)
+		}
+	}
+	if payload.RawPrompt == "" && payload.RawToolResult == "" && payload.RawResponse == "" {
 		return nil
 	}
 	return payload
@@ -97,6 +118,17 @@ func applyCompactDebugToolResult(payload *store.RequestLogDebugPayload, raw stri
 	payload.CompactToolResultBytes = len(res.Text)
 	payload.EstimatedToolTokensSaved = res.EstimatedSavedTokens
 	payload.CompactToolResult, _ = truncateDebugString(res.Text, limit)
+}
+
+func applyCompactDebugResponse(payload *store.RequestLogDebugPayload, raw string, limit int) {
+	res := tokenopt.CompactJSON(raw, tokenopt.Options{MinChars: 4096, MaxChars: limit / 2, PreserveErrors: true})
+	if !res.Applied {
+		return
+	}
+	payload.CompactResponseApplied = true
+	payload.CompactResponseBytes = len(res.Text)
+	payload.EstimatedResponseTokensSaved = res.EstimatedSavedTokens
+	payload.CompactResponse, _ = truncateDebugString(res.Text, limit)
 }
 
 func compactDebugJSON(value any) string {

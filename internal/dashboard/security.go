@@ -105,6 +105,31 @@ func sanitizeProviders(in []store.Provider) []store.Provider {
 	return out
 }
 
+func sanitizeProviderAccount(account store.ProviderAccount) store.ProviderAccount {
+	account.APIKey = maskSecret(account.APIKey)
+	account.AccessToken = maskSecret(account.AccessToken)
+	account.RefreshToken = maskSecret(account.RefreshToken)
+	account.ProxyURL = redactProxyURL(account.ProxyURL)
+	return account
+}
+
+func mergeProviderAccountSecrets(incoming *store.ProviderAccount, current store.ProviderAccount) {
+	// Account credentials are write-only. An omitted edit field means retain the
+	// existing credential, while a non-empty value intentionally replaces it.
+	if strings.TrimSpace(incoming.APIKey) == "" || isMaskedSecret(incoming.APIKey) {
+		incoming.APIKey = current.APIKey
+	}
+	if strings.TrimSpace(incoming.AccessToken) == "" || isMaskedSecret(incoming.AccessToken) {
+		incoming.AccessToken = current.AccessToken
+	}
+	if strings.TrimSpace(incoming.RefreshToken) == "" || isMaskedSecret(incoming.RefreshToken) {
+		incoming.RefreshToken = current.RefreshToken
+	}
+	if strings.TrimSpace(incoming.ProxyURL) == "" || isMaskedProxyURL(incoming.ProxyURL) {
+		incoming.ProxyURL = current.ProxyURL
+	}
+}
+
 // mergeProviderSecrets restores stored provider credentials when the incoming
 // payload carries masked placeholders.
 func mergeProviderSecrets(incoming *store.Provider, current store.Provider) {

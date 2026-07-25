@@ -48,40 +48,67 @@
       <button type="button" class="btn-secondary" data-open-modal="model-pricing-modal">{{tr .T "pricing.add_rule"}}</button>
     </div>
     <textarea name="model_prices" id="model-prices-text" hidden>{{.ModelPricesText}}</textarea>
-    <div class="pricing-rule-grid pricing-rule-grid-friendly" id="pricing-rule-grid">
-      {{range .PricingGroups}}
-      <article class="pricing-rule-card" data-pricing-card>
-        <input type="hidden" data-pricing-field="provider" value="{{.ProviderID}}">
-        <input type="hidden" data-pricing-field="model" value="{{.Model}}">
-        <textarea hidden data-pricing-field="pairs">{{.PairsText}}</textarea>
-        <input type="hidden" data-pricing-field="input" value="{{printf "%.6f" .InputPer1M}}">
-        <input type="hidden" data-pricing-field="output" value="{{printf "%.6f" .OutputPer1M}}">
-        <input type="hidden" data-pricing-field="cached" value="{{printf "%.6f" .CachedInputPer1M}}">
-        <input type="hidden" data-pricing-field="reasoning" value="{{printf "%.6f" .ReasoningPer1M}}">
-        <input type="hidden" data-pricing-field="context" value="{{.ContextLength}}">
-        <input type="hidden" data-pricing-field="rpm" value="{{.RPM}}">
-        <input type="hidden" data-pricing-field="tpm" value="{{.TPM}}">
-        <input type="hidden" data-pricing-field="daily_requests" value="{{.DailyRequests}}">
-        <input type="hidden" data-pricing-field="daily_tokens" value="{{.DailyTokens}}">
-        <div class="api-key-card-head">
-          <div><span class="badge">Pricing{{if gt .Count 1}} × {{.Count}}{{end}}</span><h3>{{.ProviderID}} / {{.Model}}</h3></div>
-          <div class="inline-actions"><button type="button" class="btn-secondary js-edit-pricing">{{tr $.T "common.edit"}}</button><button type="submit" class="btn-danger js-remove-pricing">{{tr $.T "common.delete"}}</button></div>
-        </div>
-        <div class="api-key-limits pricing-friendly-limits">
-          <span><small>Input</small><strong>${{printf "%.4f" .InputPer1M}}</strong>/1M</span>
-          <span><small>Output</small><strong>${{printf "%.4f" .OutputPer1M}}</strong>/1M</span>
-          <span><small>Cached</small><strong>${{printf "%.4f" .CachedInputPer1M}}</strong>/1M</span>
-          <span><small>Reasoning</small><strong>${{printf "%.4f" .ReasoningPer1M}}</strong>/1M</span>
-          <span><small>Context</small><strong>{{if .ContextLength}}{{.ContextLength}}{{else}}auto{{end}}</strong></span>
-          <span><small>RPM</small><strong>{{if .RPM}}{{.RPM}}{{else}}∞{{end}}</strong></span>
-          <span><small>TPM</small><strong>{{if .TPM}}{{.TPM}}{{else}}∞{{end}}</strong></span>
-          <span><small>Req/day</small><strong>{{if .DailyRequests}}{{.DailyRequests}}{{else}}∞{{end}}</strong></span>
-          <span><small>Token/day</small><strong>{{if .DailyTokens}}{{.DailyTokens}}{{else}}∞{{end}}</strong></span>
-        </div>
-      </article>
-      {{else}}
-      <article class="api-key-empty" id="pricing-empty-state"><h3>{{tr .T "pricing.empty"}}</h3><p>{{tr .T "pricing.desc"}}</p></article>
-      {{end}}
+    <div class="pricing-table-shell" id="pricing-rule-grid">
+      <div class="pricing-table-scroll">
+        <table class="pricing-rules-table">
+          <thead>
+            <tr>
+              <th scope="col">Rule</th>
+              <th scope="col">Input <small>/1M tokens</small></th>
+              <th scope="col">Output <small>/1M tokens</small></th>
+              <th scope="col">Cached <small>/1M tokens</small></th>
+              <th scope="col">Reasoning <small>/1M tokens</small></th>
+              <th scope="col">Context</th>
+              <th scope="col">RPM</th>
+              <th scope="col">TPM</th>
+              <th scope="col">Req/day</th>
+              <th scope="col">Token/day</th>
+              <th scope="col">{{if eq .Lang "vi"}}Thao tác{{else}}Actions{{end}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range $index, $rule := .PricingGroups}}
+            <tr data-pricing-card>
+              <td class="pricing-rule-identity">
+                <input type="hidden" data-pricing-field="provider" value="{{$rule.ProviderID}}">
+                <input type="hidden" data-pricing-field="model" value="{{$rule.Model}}">
+                <textarea hidden data-pricing-field="pairs">{{$rule.PairsText}}</textarea>
+                <input type="hidden" data-pricing-field="input" value="{{printf "%.6f" $rule.InputPer1M}}">
+                <input type="hidden" data-pricing-field="output" value="{{printf "%.6f" $rule.OutputPer1M}}">
+                <input type="hidden" data-pricing-field="cached" value="{{printf "%.6f" $rule.CachedInputPer1M}}">
+                <input type="hidden" data-pricing-field="reasoning" value="{{printf "%.6f" $rule.ReasoningPer1M}}">
+                <input type="hidden" data-pricing-field="context" value="{{$rule.ContextLength}}">
+                <input type="hidden" data-pricing-field="rpm" value="{{$rule.RPM}}">
+                <input type="hidden" data-pricing-field="tpm" value="{{$rule.TPM}}">
+                <input type="hidden" data-pricing-field="daily_requests" value="{{$rule.DailyRequests}}">
+                <input type="hidden" data-pricing-field="daily_tokens" value="{{$rule.DailyTokens}}">
+                <span class="pricing-rule-number" aria-hidden="true"></span>
+                <span class="pricing-rule-name">
+                  <span class="badge">Pricing{{if gt $rule.Count 1}} × {{$rule.Count}}{{end}}</span>
+                  <strong title="{{if $rule.ProviderID}}{{$rule.ProviderID}}{{else}}{{if eq $.Lang "vi"}}Tất cả provider{{else}}All providers{{end}}{{end}} / {{$rule.Model}}">{{if $rule.ProviderID}}{{$rule.ProviderID}}{{else}}{{if eq $.Lang "vi"}}Tất cả provider{{else}}All providers{{end}}{{end}} / {{$rule.Model}}</strong>
+                </span>
+              </td>
+              <td class="pricing-money"><strong>${{printf "%.4f" $rule.InputPer1M}}</strong></td>
+              <td class="pricing-money"><strong>${{printf "%.4f" $rule.OutputPer1M}}</strong></td>
+              <td class="pricing-money"><strong>${{printf "%.4f" $rule.CachedInputPer1M}}</strong></td>
+              <td class="pricing-money pricing-reasoning"><strong>${{printf "%.4f" $rule.ReasoningPer1M}}</strong></td>
+              <td><span class="pricing-limit-value">{{if $rule.ContextLength}}{{$rule.ContextLength}}{{else}}auto{{end}}</span></td>
+              <td><span class="pricing-limit-value">{{if $rule.RPM}}{{$rule.RPM}}{{else}}∞{{end}}</span></td>
+              <td><span class="pricing-limit-value">{{if $rule.TPM}}{{$rule.TPM}}{{else}}∞{{end}}</span></td>
+              <td><span class="pricing-limit-value">{{if $rule.DailyRequests}}{{$rule.DailyRequests}}{{else}}∞{{end}}</span></td>
+              <td><span class="pricing-limit-value">{{if $rule.DailyTokens}}{{$rule.DailyTokens}}{{else}}∞{{end}}</span></td>
+              <td><div class="pricing-row-actions"><button type="button" class="btn-secondary js-edit-pricing" title="{{tr $.T "common.edit"}}">✎</button><button type="submit" class="btn-danger js-remove-pricing" title="{{tr $.T "common.delete"}}">⌫</button></div></td>
+            </tr>
+            {{else}}
+            <tr><td colspan="11"><div class="api-key-empty" id="pricing-empty-state"><h3>{{tr .T "pricing.empty"}}</h3><p>{{tr .T "pricing.desc"}}</p></div></td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      <div class="pricing-table-notes">
+        <div><span class="pricing-note-icon">ⓘ</span><p><strong>{{if eq .Lang "vi"}}Ghi chú{{else}}Notes{{end}}</strong><small>{{if eq .Lang "vi"}}Giá được tính theo USD trên mỗi 1 triệu token. Context để auto dùng metadata của model; rate limit bằng 0 là không giới hạn.{{else}}Prices are USD per 1 million tokens. Auto context uses model metadata; zero rate limits are unlimited.{{end}}</small></p></div>
+        <div><span class="pricing-note-icon accent">$</span><p><strong>{{if eq .Lang "vi"}}Công thức chi phí{{else}}Cost formula{{end}}</strong><small>(Input × Input Price) + (Output × Output Price) + (Cached × Cached Price)</small></p></div>
+      </div>
     </div>
   </section>
 
@@ -100,9 +127,9 @@
       <button type="button" class="icon-btn" data-close-modal>×</button>
     </div>
     <div class="provider-form-grid" id="model-pricing-form">
-      <label>Provider(s)<input data-new-pricing="provider" placeholder="codex-1, codex-2, openai"></label>
-      <label>Model(s)<input data-new-pricing="model" placeholder="gpt-4.1, cx/gpt-5.5"></label>
-      <p class="wide muted-text">{{if eq .Lang "vi"}}Có thể nhập một hoặc nhiều provider và model, cách nhau bằng dấu phẩy. Ví dụ nhiều account Codex dùng cùng model: provider = codex-1, codex-2; model = gpt-5. Khi lưu sẽ tạo/cập nhật giá cho mọi cặp provider × model.{{else}}Enter one or more providers and models separated by commas. Example for multiple Codex accounts sharing a model: provider = codex-1, codex-2; model = gpt-5. Saving creates/updates every provider × model pair.{{end}}</p>
+      <label>Provider(s)<input data-new-pricing="provider" placeholder="blank = all providers; or codex-1, codex-2, openai"></label>
+      <label>Model(s)<input data-new-pricing="model" placeholder="gpt-4.1, gpt-5.5, cx/gpt-5.5"></label>
+      <p class="wide muted-text">{{if eq .Lang "vi"}}Để trống Provider để đặt giá chung theo model cho mọi provider. Có thể nhập một hoặc nhiều provider/model, cách nhau bằng dấu phẩy; khi lưu sẽ tạo/cập nhật mọi cặp provider × model.{{else}}Leave Provider blank to set one model price for all providers. You can also enter one or more providers/models separated by commas; saving creates/updates every provider × model pair.{{end}}</p>
       <label>Input USD / 1M<input data-new-pricing="input" type="number" min="0" step="0.000001" placeholder="0"></label>
       <label>Output USD / 1M<input data-new-pricing="output" type="number" min="0" step="0.000001" placeholder="0"></label>
       <label>Cached input USD / 1M<input data-new-pricing="cached" type="number" min="0" step="0.000001" placeholder="0"></label>

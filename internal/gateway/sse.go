@@ -93,6 +93,8 @@ func streamPassthrough(ctx context.Context, w http.ResponseWriter, resp *http.Re
 				}
 				if !usage.hasTokens() {
 					usage = estimateUsage(requestBody, outputChars)
+				} else {
+					usage = usage.ensureOutputEstimated(outputChars)
 				}
 				return usage, nil
 			}
@@ -140,6 +142,8 @@ func streamResponsesToChat(ctx context.Context, w http.ResponseWriter, resp *htt
 		finalSent = true
 		if !usage.hasTokens() {
 			usage = estimateUsage(requestBody, outputChars)
+		} else {
+			usage = usage.ensureOutputEstimated(outputChars)
 		}
 		chunk := map[string]any{
 			"id":      chatID,

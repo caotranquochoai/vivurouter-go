@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initNotices();
   initAPIKeyQuotas();
   initPricingFilter();
+  initCodexResetCredits();
   initProviderModelCollapse();
   initRestoreGuard();
   initClearRequestDebug();
@@ -25,9 +26,11 @@ document.addEventListener("DOMContentLoaded", () => {
   initBudgetBars();
   initUsageChart();
   initUsageStatsTable();
+  initDashboardQuickStart();
   initRecentRequestsLive();
   initPromptRouterRoles();
   initFusionEditor();
+  initSidebar();
 });
 
 function t(key, fallback) { return window.VivuRouterI18n?.messages?.[key] || fallback || key; }
@@ -43,6 +46,19 @@ function showToast(message, ok = true) {
 }
 function setChecked(name, checked) { const el = document.querySelector(`[name="${name}"]`); if (el) el.checked = checked; }
 function setValue(name, value) { const el = document.querySelector(`[name="${name}"]`); if (el) el.value = value; }
+
+function initSidebar() {
+  const toggle = document.querySelector("[data-toggle-sidebar]");
+  if (!toggle) return;
+  const open = () => { document.body.classList.add("sidebar-open"); toggle.setAttribute("aria-expanded", "true"); };
+  const close = () => { document.body.classList.remove("sidebar-open"); toggle.setAttribute("aria-expanded", "false"); };
+  toggle.addEventListener("click", () => {
+    document.body.classList.contains("sidebar-open") ? close() : open();
+  });
+  document.querySelectorAll("[data-close-sidebar]").forEach((el) => el.addEventListener("click", close));
+  document.querySelectorAll(".sidebar-nav a").forEach((a) => a.addEventListener("click", close));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+}
 function csvEscape(value) { const text = String(value ?? "").trim(); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
 function splitCSV(value) { return String(value || "").split(",").map((x) => x.trim()).filter(Boolean); }
 
@@ -269,10 +285,26 @@ function initProviderActions() {
         const unavailable = !!data.message && !cards && !(Array.isArray(data.models) && data.models.length);
         const available = !(data.limit_reached || data.review_limit_reached || unavailable);
         const statusLabel = unavailable ? "Unavailable" : (available ? "Available" : "Limit reached");
-        const html = `<div class="quota-result"><div class="quota-header"><div><strong>${quotaName} quota</strong><small>${escapeHtml(data.plan || "unknown plan")}</small></div><span class="badge badge-${available ? "ok" : "error"}">${statusLabel}</span></div>${cards ? `<div class="quota-grid">${cards}</div>` : `<p class="muted-text">${escapeHtml(data.message || "No quota windows returned.")}</p>`}${modelNote}</div>`;
+        const resetCreditCount = Number(data.reset_credits?.available_count || 0);
+        document.querySelectorAll(`.js-codex-reset[data-provider-id="${CSS.escape(providerID)}"]:not([data-account-id])`).forEach((button) => { button.dataset.creditCount = String(resetCreditCount); button.disabled = resetCreditCount < 1; button.title = resetCreditCount ? `${resetCreditCount} reset credit(s) available` : "No reset credits available"; });
+        const resetNote = !isAntigravity ? `<p class="muted-text"><strong>${resetCreditCount}</strong> Codex reset credit(s) available.</p>` : "";
+        const html = `<div class="quota-result"><div class="quota-header"><div><strong>${quotaName} quota</strong><small>${escapeHtml(data.plan || "unknown plan")}</small></div><span class="badge badge-${available ? "ok" : "error"}">${statusLabel}</span></div>${cards ? `<div class="quota-grid">${cards}</div>` : `<p class="muted-text">${escapeHtml(data.message || "No quota windows returned.")}</p>`}${resetNote}${modelNote}</div>`;
         setResultHTML(providerID, html, `${quotaName} quota updated`, available);
       } catch (err) { setResult(providerID, err.message || String(err), false); }
       finally { quota.disabled = false; quota.textContent = t("providers.quota", "Quota"); }
+      return;
+    }
+    const hide = event.target.closest(".js-hide-model, .js-unhide-model");
+    if (hide) {
+      event.preventDefault();
+      const hidden = hide.classList.contains("js-hide-model");
+      const providerID = hide.dataset.providerId || "";
+      const model = hide.dataset.model || "";
+      hide.disabled = true;
+      try {
+        await postProviderAction("/api/providers/model-visibility", { provider_id: providerID, model, hidden });
+        window.location.reload();
+      } catch (err) { setResult(providerID, err.message || String(err), false); hide.disabled = false; }
       return;
     }
     const test = event.target.closest(".js-test-model");
@@ -299,6 +331,7 @@ function initProviderActions() {
 function applyProviderPreset(preset) {
   if (!preset) return;
   const presets = {
+    custom: {id:"custom", name:"Custom OpenAI-compatible", base_url:"", models:""},
     openai: {id:"openai", name:"OpenAI", base_url:"https://api.openai.com/v1", models:"gpt-4.1, gpt-4o-mini"},
     openrouter: {id:"openrouter", name:"OpenRouter", base_url:"https://openrouter.ai/api/v1", models:"openai/gpt-4o-mini"},
     groq: {id:"groq", name:"Groq", base_url:"https://api.groq.com/openai/v1", models:"llama-3.3-70b-versatile"},
@@ -325,7 +358,7 @@ function initTokenOptimizationPresets() {
     if (p === "safe") { setChecked("token_optimize_tool_results", false); setChecked("rtk_enabled", false); setChecked("save_raw_prompt", false); setChecked("save_raw_tool_result", false); }
     if (p === "balanced") { setChecked("token_optimize_tool_results", true); setChecked("rtk_enabled", false); setValue("token_optimize_min_chars", 20000); setValue("token_optimize_max_chars", 12000); setChecked("save_raw_prompt", false); setChecked("save_raw_tool_result", false); }
     if (p === "aggressive") { setChecked("token_optimize_tool_results", true); setChecked("rtk_enabled", true); setValue("token_optimize_min_chars", 12000); setValue("token_optimize_max_chars", 8000); }
-    if (p === "debug") { setChecked("save_raw_prompt", true); setChecked("save_raw_tool_result", true); setChecked("mask_debug_secrets", true); setChecked("compact_debug_payloads", true); }
+    if (p === "debug") { setChecked("save_raw_prompt", true); setChecked("save_raw_tool_result", true); setChecked("save_raw_response", true); setChecked("mask_debug_secrets", true); setChecked("compact_debug_payloads", true); }
     showToast(`Applied ${p} preset`);
   });
 }
@@ -334,8 +367,8 @@ function initRequestFilters() { const input = document.getElementById("request-f
 function initRequestDebugModal() {
   const modal = document.getElementById("request-debug-modal"), raw = document.getElementById("request-debug-raw"), meta = document.getElementById("request-debug-meta");
   let payload = null, activeTab = "compact-prompt";
-  const tabText = (d) => activeTab === "raw-prompt" ? d.raw_prompt : activeTab === "compact-tool" ? d.compact_tool_result : activeTab === "raw-tool" ? d.raw_tool_result : d.compact_prompt;
-  const render = () => { const d = payload?.debug || {}; if (raw) raw.textContent = tabText(d) || "No payload stored for this section."; if (meta) meta.textContent = [payload?.id, d.redacted && "redacted", d.raw_prompt_truncated || d.raw_tool_truncated ? "truncated" : ""].filter(Boolean).join(" · "); document.querySelectorAll("[data-debug-tab]").forEach((b) => b.classList.toggle("active", b.dataset.debugTab === activeTab)); };
+  const tabText = (d) => activeTab === "raw-prompt" ? d.raw_prompt : activeTab === "compact-tool" ? d.compact_tool_result : activeTab === "raw-tool" ? d.raw_tool_result : activeTab === "compact-response" ? d.compact_response : activeTab === "raw-response" ? d.raw_response : d.compact_prompt;
+  const render = () => { const d = payload?.debug || {}; if (raw) raw.textContent = tabText(d) || "No payload stored for this section."; if (meta) meta.textContent = [payload?.id, d.redacted && "redacted", d.raw_prompt_truncated || d.raw_tool_truncated || d.raw_response_truncated ? "truncated" : ""].filter(Boolean).join(" · "); document.querySelectorAll("[data-debug-tab]").forEach((b) => b.classList.toggle("active", b.dataset.debugTab === activeTab)); };
   document.addEventListener("click", async (event) => {
     const toggle = event.target.closest(".js-request-debug-toggle"); if (toggle) { const body = toggle.closest(".request-debug-panel")?.querySelector(".request-debug-body"); if (body) body.hidden = !body.hidden; return; }
     const load = event.target.closest(".js-request-debug-load"); if (load) { const old = load.textContent; load.disabled = true; load.textContent = "Loading..."; try { const res = await fetch(`/api/admin/request-debug?id=${encodeURIComponent(load.dataset.requestId || "")}`, {cache:"no-store"}); payload = await safeJSON(res); activeTab = "compact-prompt"; if (modal) modal.hidden = false; render(); } catch(e) { showToast(String(e), false); } finally { load.disabled = false; load.textContent = old; } return; }
@@ -347,16 +380,379 @@ function initRequestDebugModal() {
 function initRTKStatus() { const btn = document.querySelector(".js-check-rtk"), summary = document.getElementById("rtk-status-summary"), details = document.getElementById("rtk-status-details"); if (!btn) return; const run = async () => { const params = new URLSearchParams(); const en = document.querySelector('[name="rtk_enabled"]'); const path = document.querySelector('[name="rtk_path"]'); if (en) params.set("rtk_enabled", en.checked ? "1" : "0"); if (path) params.set("rtk_path", path.value || ""); btn.disabled = true; try { const res = await fetch(`/api/admin/rtk/status?${params}`, {cache:"no-store"}); const data = await safeJSON(res); const token = !!data.token_optimize_tool_results; summary.textContent = data.enabled ? (data.can_run_now ? `RTK ready: ${data.version || data.path || "detected"}` : data.message || "RTK enabled but not runnable") : (token ? "Native tool-result optimization is enabled. RTK bridge is disabled." : "RTK bridge is disabled."); if (details) { details.hidden = false; details.innerHTML = Object.entries({"Tool-result optimizer": token ? "enabled" : "disabled", "RTK bridge": data.enabled ? "enabled" : "disabled", Found: data.found ? "yes" : "no", Source: data.source || "-", Path: data.path || "-", Version: data.version || "-"}).map(([k,v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join(""); } } catch(e) { summary.textContent = String(e); } finally { btn.disabled = false; } }; btn.addEventListener("click", run); if (document.getElementById("rtk-status-card")?.dataset.autoCheck === "1") run(); }
 function initClearRequestDebug() { const btn = document.querySelector(".js-clear-request-debug"); if (!btn) return; btn.addEventListener("click", async () => { if (!confirm(t("js.clear_debug_confirm", "Clear saved raw debug payloads?"))) return; const res = await fetch("/api/admin/request-debug/clear", {method:"POST", cache:"no-store"}); const data = await safeJSON(res); showToast(res.ok ? `Deleted ${data.deleted || 0} debug payloads` : (data.message || "Cleanup failed"), res.ok); }); }
 function initNotices() { setTimeout(() => document.querySelectorAll(".notice").forEach((n) => n.classList.add("is-hiding")), 2500); }
+function initCodexResetCredits() {
+  const modal = document.getElementById("codex-reset-credits-modal");
+  if (!modal) return;
+  const summary = modal.querySelector("[data-codex-reset-summary]");
+  const body = modal.querySelector("[data-codex-reset-credits-body]");
+  const label = modal.querySelector("[data-codex-reset-account-label]");
+  const isVI = document.documentElement.lang === "vi";
+  const text = (vi, en) => isVI ? vi : en;
+  const endpoint = (button) => {
+    const params = new URLSearchParams({ provider_id: button.dataset.providerId || "" });
+    if (button.dataset.accountId) params.set("account_id", button.dataset.accountId);
+    return `/api/codex/reset-credits?${params}`;
+  };
+  const dateText = (value) => value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toLocaleString() : "—";
+  const remainingText = (value) => {
+    const ms = value ? new Date(value).getTime() - Date.now() : NaN;
+    if (!Number.isFinite(ms)) return "—";
+    if (ms <= 0) return text("Đã hết hạn", "Expired");
+    const days = Math.floor(ms / 86400000), hours = Math.floor(ms % 86400000 / 3600000);
+    return days > 0 ? `${days}d ${hours}h` : `${Math.max(1, hours)}h`;
+  };
+  const applyCount = (source, count) => {
+    document.querySelectorAll(`.js-codex-reset[data-provider-id="${CSS.escape(source.dataset.providerId || "")}"]`).forEach((button) => {
+      if ((button.dataset.accountId || "") !== (source.dataset.accountId || "")) return;
+      button.dataset.creditCount = String(count);
+      button.disabled = count < 1;
+      button.title = count ? `${count} reset credit(s) available` : "No reset credits available";
+    });
+  };
+  const load = async (button, show = true) => {
+    if (show) {
+      label.textContent = button.dataset.accountLabel || button.dataset.accountId || text("Tài khoản mặc định", "Default account");
+      summary.textContent = text("Đang tải reset credit…", "Loading reset credits…");
+      body.replaceChildren();
+      openModal("codex-reset-credits-modal");
+    }
+    const response = await fetch(endpoint(button), { headers: { Accept: "application/json" }, cache: "no-store" });
+    const data = await safeJSON(response);
+    if (!response.ok) throw new Error(data.error || data.message || `HTTP ${response.status}`);
+    const credits = Array.isArray(data.credits) ? data.credits : [];
+    const count = Number(data.available_count || 0);
+    applyCount(button, count);
+    if (show) {
+      summary.innerHTML = `<strong>${count}</strong> ${escapeHtml(text("credit khả dụng", "available credit(s)"))} · ${credits.length} ${escapeHtml(text("credit tổng cộng", "total credit(s)"))}`;
+      const rows = credits.map((credit) => {
+        const row = document.createElement("tr");
+        [credit.status || "unknown", dateText(credit.granted_at), dateText(credit.expires_at), remainingText(credit.expires_at)].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); });
+        return row;
+      });
+      if (rows.length) body.replaceChildren(...rows);
+      else { const row = document.createElement("tr"), cell = document.createElement("td"); cell.colSpan = 4; cell.textContent = text("Không có chi tiết reset credit.", "No reset credit details returned."); row.append(cell); body.replaceChildren(row); }
+    }
+    return data;
+  };
+  document.addEventListener("click", async (event) => {
+    const expiry = event.target.closest(".js-codex-credit-expiry");
+    if (expiry) {
+      event.preventDefault();
+      expiry.disabled = true;
+      try { await load(expiry, true); } catch (error) { summary.textContent = error.message || String(error); showToast(summary.textContent, false); }
+      finally { expiry.disabled = false; }
+      return;
+    }
+    const reset = event.target.closest(".js-codex-reset");
+    if (!reset) return;
+    event.preventDefault();
+    const count = Number(reset.dataset.creditCount || 0);
+    if (count < 1) return;
+    const account = reset.dataset.accountLabel || reset.dataset.accountId || text("tài khoản mặc định", "default account");
+    if (!window.confirm(text(`Dùng 1 Codex reset credit cho ${account}? Còn ${count} credit. Hành động này không thể hoàn tác.`, `Use 1 Codex reset credit for ${account}? ${count} credit(s) remain. This cannot be undone.`))) return;
+    reset.disabled = true;
+    try {
+      const response = await fetch(endpoint(reset), { method: "POST", headers: { Accept: "application/json" } });
+      const data = await safeJSON(response);
+      if (!response.ok) throw new Error(data.error || data.message || `HTTP ${response.status}`);
+      showToast(text(`Đã reset ${Number(data.windows_reset || 0)} cửa sổ quota.`, `Reset ${Number(data.windows_reset || 0)} quota window(s).`));
+      await load(reset, false);
+      const quotaButton = reset.dataset.accountId ? null : document.querySelector(`.js-refresh-codex-quota[data-provider-id="${CSS.escape(reset.dataset.providerId || "")}"]`);
+      quotaButton?.click();
+    } catch (error) {
+      if (String(error.message || error).includes("No Codex reset credits")) applyCount(reset, 0);
+      showToast(error.message || String(error), false);
+    } finally { reset.disabled = Number(reset.dataset.creditCount || 0) < 1; }
+  });
+}
+
 function initProviderModelCollapse() {
+  document.addEventListener("click", async (e) => {
+    const connect = e.target.closest(".js-connect-codex-account");
+    if (!connect) return;
+    e.preventDefault();
+    const params = new URLSearchParams({ json: "1", provider_id: connect.dataset.providerId || "", account_id: connect.dataset.accountId || "" });
+    if (connect.dataset.proxyUrl) params.set("proxy_url", connect.dataset.proxyUrl);
+    connect.disabled = true;
+    const originalText = connect.textContent;
+    connect.textContent = "Starting OAuth…";
+    try {
+      const res = await fetch(`/api/codex/oauth/start?${params}`, { method: "POST", cache: "no-store", headers: { Accept: "application/json" } });
+      const data = await safeJSON(res);
+      if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+      const authURL = data.auth_url || data.AuthURL || "";
+      if (!authURL) throw new Error("OAuth authorization URL was not returned");
+      window.open(authURL, "_blank", "noopener,noreferrer");
+      showToast("OAuth opened in a new tab. Complete it to connect this account.");
+    } catch (err) {
+      showToast(`Could not start account OAuth: ${err.message || err}`, false);
+    } finally {
+      connect.disabled = false;
+      connect.textContent = originalText;
+    }
+  });
   document.addEventListener("click", (e) => {
     const btn = e.target.closest(".js-expand-provider-models");
     if (!btn) return;
     const section = btn.closest(".provider-detail-section") || document;
-    const list = section.querySelector("[data-provider-model-list]");
-    if (list) list.classList.remove("is-collapsed");
+    const scroll = section.querySelector("[data-provider-model-scroll]");
+    if (scroll) scroll.classList.remove("is-collapsed");
     section.querySelectorAll(".provider-model-extra").forEach((el) => el.hidden = false);
     btn.hidden = true;
   });
+  document.querySelectorAll("[data-provider-account-pool]").forEach((pool) => {
+    const providerID = pool.dataset.providerId;
+    const list = pool.querySelector("[data-managed-provider-accounts]");
+    const form = document.querySelector(`[data-provider-account-form][data-provider-id="${CSS.escape(providerID || "")}"]`);
+    const result = form?.querySelector("[data-provider-account-result]");
+    const oauthPanel = form?.querySelector("[data-provider-account-oauth]");
+    const oauthOpen = form?.querySelector(".js-account-oauth-open");
+    const oauthCreateLink = form?.querySelector(".js-account-oauth-create-link");
+    const oauthManual = form?.querySelector(".account-oauth-manual");
+    const oauthAuthLink = form?.querySelector("[data-account-oauth-auth-link]");
+    const oauthCallbackLink = form?.querySelector("[data-account-oauth-callback-link]");
+    const accountID = () => form?.querySelector('[name="id"]')?.value || "";
+    const accountProxy = () => form?.querySelector('[name="proxy_url"]')?.value || "";
+    const setOAuthEnabled = (enabled) => {
+      if (oauthPanel) oauthPanel.hidden = false;
+      if (oauthOpen) oauthOpen.disabled = !enabled;
+      if (oauthCreateLink) oauthCreateLink.disabled = !enabled;
+    };
+    const ensureAccountID = () => {
+      const input = form?.querySelector('[name="id"]');
+      if (input && !input.value) input.value = `account-${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+      return input?.value || "";
+    };
+    const resetForm = () => {
+      if (!form) return;
+      form.reset();
+      form.querySelector('[name="id"]').value = "";
+      form.querySelector('[name="priority"]').value = "1";
+      const quotaLimit = form.querySelector('[name="quota_limit_percent"]');
+      if (quotaLimit) quotaLimit.value = "0";
+      form.querySelector('[name="enabled"]').checked = true;
+      syncAuthFields();
+      if (oauthManual) oauthManual.hidden = true;
+      if (oauthAuthLink) oauthAuthLink.value = "";
+      if (oauthCallbackLink) oauthCallbackLink.value = "";
+      setOAuthEnabled(false);
+      form.querySelector("[data-provider-account-submit]").textContent = document.documentElement.lang === "vi" ? "Lưu tài khoản" : "Save account";
+      if (result) result.textContent = "";
+    };
+    const isVI = document.documentElement.lang === "vi";
+    const text = (vi, en) => isVI ? vi : en;
+    const setResult = (message, ok = true) => {
+      if (!result) return;
+      result.textContent = message;
+      result.classList.toggle("error", !ok);
+    };
+    const syncAuthFields = () => {
+      const authType = form?.querySelector('[name="auth_type"]')?.value;
+      const apiKeyField = form?.querySelector("[data-account-api-key-field]");
+      const bearerField = form?.querySelector("[data-account-bearer-field]");
+      if (apiKeyField) apiKeyField.hidden = authType !== "api_key";
+      if (bearerField) bearerField.hidden = authType !== "bearer";
+    };
+    form?.querySelector('[name="auth_type"]')?.addEventListener("change", syncAuthFields);
+    const populateForm = (account) => {
+      if (!form) return;
+      resetForm();
+      form.querySelector('[name="id"]').value = account.id || "";
+      form.querySelector('[name="name"]').value = account.name || "";
+      form.querySelector('[name="auth_type"]').value = account.auth_type || form.querySelector('[name="auth_type"]').value;
+      syncAuthFields();
+      form.querySelector('[name="priority"]').value = String(account.priority || 1);
+      const quotaLimit = form.querySelector('[name="quota_limit_percent"]');
+      if (quotaLimit) quotaLimit.value = String(Number(account.quota_limit_percent || 0));
+      form.querySelector('[name="proxy_id"]').value = account.proxy_id || "";
+      form.querySelector('[name="proxy_url"]').value = "";
+      form.querySelector('[name="enabled"]').checked = !!account.enabled;
+      form.querySelector("[data-provider-account-submit]").textContent = text("Cập nhật tài khoản", "Update account");
+      setOAuthEnabled(pool.dataset.providerType === "codex");
+    };
+    const requestAccountUpdate = async (account, method = "POST") => {
+      const response = await fetch(`/api/provider-accounts?provider_id=${encodeURIComponent(providerID)}${method === "DELETE" ? `&id=${encodeURIComponent(account.id)}` : ""}`, {
+        method,
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: method === "DELETE" ? undefined : JSON.stringify(account)
+      });
+      const payload = await safeJSON(response);
+      if (!response.ok) throw new Error(payload.error || payload.message || `HTTP ${response.status}`);
+      return payload;
+    };
+    const exportForm = document.querySelector(`[data-provider-account-export-form][data-provider-id="${CSS.escape(providerID || "")}"]`);
+    const importForm = document.querySelector(`[data-provider-account-import-form][data-provider-id="${CSS.escape(providerID || "")}"]`);
+    const downloadBackup = (bytes, filename) => { const url = URL.createObjectURL(new Blob([bytes], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0); };
+    exportForm?.querySelector("[data-account-backup-format]")?.addEventListener("change", (event) => { const raw = event.currentTarget.value === "json"; exportForm.querySelector("[data-account-backup-encrypted-fields]").hidden = raw; exportForm.querySelector("[data-account-backup-plaintext-warning]").hidden = !raw; });
+    exportForm?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(exportForm).entries()); const output = exportForm.querySelector("[data-account-backup-export-result]"); const accountIDs = data.scope === "selected" ? [...list.querySelectorAll('.provider-account-card input[type="checkbox"]:checked')].map((input) => input.closest(".provider-account-card")?.dataset.accountId).filter(Boolean) : []; if (data.scope === "selected" && accountIDs.length === 0) { output.textContent = text("Chọn ít nhất một tài khoản hoặc chọn Toàn bộ Account Pool.", "Select at least one account or choose the entire Account Pool."); return; } if (data.format === "encrypted" && (!data.passphrase || data.passphrase !== data.passphrase_confirm)) { output.textContent = text("Passphrase không khớp.", "Passphrases do not match."); return; } if (data.format === "json" && !exportForm.querySelector('[name="confirm_plaintext"]').checked) { output.textContent = text("Bạn cần xác nhận cảnh báo JSON plaintext.", "You must acknowledge the plaintext JSON warning."); return; } try { const response = await fetch("/api/provider-accounts/export-encrypted", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider_id: providerID, account_ids: accountIDs, scope: data.scope, format: data.format, passphrase: data.passphrase || "", confirm_plaintext: exportForm.querySelector('[name="confirm_plaintext"]').checked }) }); if (!response.ok) throw new Error("Backup export failed"); downloadBackup(await response.arrayBuffer(), data.format === "json" ? `vivurouter-accounts-${providerID}-UNENCRYPTED.json` : `vivurouter-accounts-${providerID}.vrbackup`); output.textContent = text("Đã tải backup.", "Backup downloaded."); } catch (error) { output.textContent = error.message || "Backup export failed."; } });
+    const readImport = async () => { const file = importForm?.querySelector('[name="file"]')?.files?.[0]; if (!file) throw new Error(text("Chọn file backup trước.", "Choose a backup file first.")); return JSON.parse(await file.text()); };
+    importForm?.querySelector('[name="policy"]')?.addEventListener("change", (event) => { importForm.querySelector("[data-account-backup-replace-confirm]").hidden = event.currentTarget.value !== "replace"; });
+    importForm?.querySelector(".js-preview-account-backup")?.addEventListener("click", async () => { const output = importForm.querySelector("[data-account-backup-import-result]"); try { const bundle = await readImport(); const response = await fetch("/api/provider-accounts/import-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bundle, passphrase: importForm.querySelector('[name="passphrase"]').value, confirm_plaintext: importForm.querySelector('[name="confirm_plaintext"]').checked }) }); const preview = await safeJSON(response); if (!response.ok) throw new Error(preview.error || "Backup preview failed"); output.textContent = `${text("Tìm thấy", "Found")} ${preview.accounts?.length || 0} ${text("tài khoản", "accounts")} · ${preview.proxy_count || 0} ${text("proxy", "proxies")}`; } catch (error) { output.textContent = error.message || "Backup preview failed."; } });
+    importForm?.addEventListener("submit", async (event) => { event.preventDefault(); const output = importForm.querySelector("[data-account-backup-import-result]"); try { const bundle = await readImport(); const data = Object.fromEntries(new FormData(importForm).entries()); const response = await fetch("/api/provider-accounts/import-encrypted", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bundle, passphrase: data.passphrase || "", provider_id: providerID, policy: data.policy, confirm: data.confirm || "", confirm_plaintext: importForm.querySelector('[name="confirm_plaintext"]').checked }) }); const result = await safeJSON(response); if (!response.ok) throw new Error(result.error || "Backup import failed"); output.textContent = `${text("Đã nhập", "Imported")} ${result.imported || 0} · ${text("bỏ qua", "skipped")} ${result.skipped || 0}`; refresh(); } catch (error) { output.textContent = error.message || "Backup import failed."; } });
+    const loadQuota = async (account, target, button) => {
+      if (!['codex', 'antigravity'].includes(pool.dataset.providerType) || !account.enabled) return;
+      if (button) button.disabled = true;
+      target.textContent = text("Đang lấy quota…", "Loading quota…");
+      try {
+        const response = await fetch(`/api/provider-accounts/quota?provider_id=${encodeURIComponent(providerID)}&account_id=${encodeURIComponent(account.id)}`, { headers: { Accept: "application/json" } });
+        const payload = await safeJSON(response);
+        if (!response.ok) throw new Error(payload.error || payload.message || `HTTP ${response.status}`);
+        const report = payload.report || {};
+        const quotas = Array.isArray(report.quotas) ? report.quotas : [];
+        const summary = quotas.map((q) => `${q.name || q.key}: ${Number(q.used || 0).toFixed(0)}%`).join(" · ");
+        const limit = Number(account.quota_limit_percent || 0);
+        const routingUsed = quotas.filter((q) => ["session", "weekly"].includes(q.key)).reduce((max, q) => Math.max(max, Number(q.used || 0)), 0);
+        const limitStatus = limit > 0 && routingUsed >= limit ? text(`Đã chạm ngưỡng ${limit.toFixed(0)}% — dừng tác vụ mới`, `Limit ${limit.toFixed(0)}% reached — new tasks paused`) : "";
+        const resetCount = Number(report.reset_credits?.available_count || 0);
+        target.textContent = [summary, limitStatus, pool.dataset.providerType === "codex" ? `${resetCount} reset credit(s)` : ""].filter(Boolean).join(" · ") || report.message || text("Chưa có dữ liệu quota", "No quota data returned");
+        const resetButton = target.closest(".provider-account-card")?.querySelector(".js-codex-reset");
+        if (resetButton) { resetButton.dataset.creditCount = String(resetCount); resetButton.disabled = resetCount < 1; }
+        target.title = report.plan ? `${text("Gói", "Plan")}: ${report.plan}` : "";
+      } catch (error) {
+        target.textContent = error.message || text("Không thể lấy quota", "Unable to load quota");
+        target.classList.add("is-error");
+      } finally { if (button) button.disabled = false; }
+    };
+    const refresh = () => {
+      if (!providerID || !list) return;
+      list.classList.add("is-loading");
+      list.textContent = text("Đang tải tài khoản…", "Loading accounts…");
+      fetch(`/api/provider-accounts?provider_id=${encodeURIComponent(providerID)}`, { headers: { Accept: "application/json" } })
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+        .then((accounts) => {
+          list.classList.remove("is-loading");
+          const count = pool.querySelector(".provider-account-count");
+          if (count) count.textContent = String((Array.isArray(accounts) ? accounts.length : 0) + 1);
+          if (!Array.isArray(accounts) || accounts.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "provider-account-empty";
+            empty.innerHTML = `<strong>${text("Chưa có tài khoản được quản lý", "No managed accounts")}</strong><span>${text("Thêm tài khoản để dùng credential, proxy và cooldown riêng.", "Add an account for its own credentials, proxy, and cooldown.")}</span>`;
+            list.replaceChildren(empty);
+            return;
+          }
+          const rows = accounts.map((account) => {
+            const row = document.createElement("article");
+            row.className = `provider-account-card${account.enabled ? "" : " is-disabled"}`;
+            row.dataset.accountId = account.id || "";
+            const state = account.enabled ? text("Đang hoạt động", "Active") : text("Đã tắt", "Disabled");
+            const cooldown = account.cooldown_until && new Date(account.cooldown_until) > new Date();
+            const proxy = account.proxy_id ? `${text("Pool", "Pool")}: ${account.proxy_id}` : (account.proxy_url ? text("Proxy riêng", "Custom proxy") : text("Kết nối trực tiếp", "Direct route"));
+            const health = cooldown ? `${text("Cooldown đến", "Cooldown until")} ${new Date(account.cooldown_until).toLocaleTimeString()}` : (account.failure_streak ? `${text("Lỗi liên tiếp", "Failure streak")}: ${account.failure_streak}` : text("Sẵn sàng", "Ready"));
+            row.innerHTML = `<div class="provider-account-select"><input type="checkbox" aria-label="Select account"></div><div class="provider-account-identity"><span class="provider-account-status ${account.enabled && !cooldown ? "is-active" : ""}"></span><div><strong></strong><small></small></div></div><div class="provider-account-meta"><span class="badge badge-info"></span><span></span><span></span></div><div class="provider-account-health ${cooldown ? "is-cooldown" : ""}"></div><div class="provider-account-actions"></div><div class="provider-account-quota" hidden></div>`;
+            row.querySelector("strong").textContent = account.name || account.id;
+            row.querySelector("small").textContent = `${account.id || "—"} · ${state}`;
+            row.querySelector(".badge").textContent = account.auth_type || "—";
+            const meta = row.querySelectorAll(".provider-account-meta span");
+            meta[1].textContent = account.quota_limit_percent > 0 ? `${text("Ưu tiên", "Priority")} ${account.priority || 1} · ${text("Ngưỡng", "Limit")} ${Number(account.quota_limit_percent).toFixed(0)}%` : `${text("Ưu tiên", "Priority")} ${account.priority || 1}`;
+            meta[2].textContent = proxy;
+            row.querySelector(".provider-account-health").textContent = health;
+            const actions = row.querySelector(".provider-account-actions");
+            const quota = row.querySelector(".provider-account-quota");
+            if (['codex', 'antigravity'].includes(pool.dataset.providerType)) {
+              quota.hidden = false;
+              const quotaButton = document.createElement("button"); quotaButton.type = "button"; quotaButton.className = "btn-secondary btn-sm"; quotaButton.textContent = text("Quota", "Quota");
+              quotaButton.addEventListener("click", () => loadQuota(account, quota, quotaButton));
+              actions.append(quotaButton);
+              if (pool.dataset.providerType === "codex") {
+                const resetButton = document.createElement("button"); resetButton.type = "button"; resetButton.className = "btn-secondary btn-sm js-codex-reset"; resetButton.textContent = "Reset"; resetButton.dataset.providerId = providerID; resetButton.dataset.accountId = account.id || ""; resetButton.dataset.accountLabel = account.name || account.id || "Codex account"; resetButton.dataset.creditCount = "0"; resetButton.disabled = true;
+                const expiryButton = document.createElement("button"); expiryButton.type = "button"; expiryButton.className = "btn-secondary btn-sm js-codex-credit-expiry"; expiryButton.textContent = text("Hạn credit", "Expiry"); expiryButton.dataset.providerId = providerID; expiryButton.dataset.accountId = account.id || ""; expiryButton.dataset.accountLabel = account.name || account.id || "Codex account";
+                actions.append(resetButton, expiryButton);
+              }
+            }
+            const edit = document.createElement("button"); edit.type = "button"; edit.className = "btn-secondary btn-sm"; edit.textContent = text("Sửa", "Edit");
+            edit.addEventListener("click", () => { populateForm(account); openModal("provider-account-modal"); });
+            const toggle = document.createElement("button"); toggle.type = "button"; toggle.className = "btn-secondary btn-sm"; toggle.textContent = account.enabled ? text("Tắt", "Disable") : text("Bật", "Enable");
+            toggle.addEventListener("click", async () => { try { await requestAccountUpdate({ ...account, enabled: !account.enabled }); refresh(); showToast(text("Đã cập nhật trạng thái tài khoản.", "Account status updated.")); } catch (error) { showToast(error.message || "Unable to update account.", false); } });
+            const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn-danger btn-sm"; remove.textContent = text("Xóa", "Delete");
+            remove.addEventListener("click", async () => { if (!window.confirm(text(`Xóa tài khoản ${account.name || account.id}?`, `Delete account ${account.name || account.id}?`))) return; try { await requestAccountUpdate(account, "DELETE"); refresh(); showToast(text("Đã xóa tài khoản.", "Account deleted.")); } catch (error) { showToast(error.message || "Unable to delete account.", false); } });
+            actions.append(edit, toggle, remove);
+            return row;
+          });
+          list.replaceChildren(...rows);
+          if (['codex', 'antigravity'].includes(pool.dataset.providerType)) {
+            accounts.filter((account) => account.enabled).forEach((account) => {
+              const card = list.querySelector(`[data-account-id="${CSS.escape(account.id || "")}"]`);
+              const quota = card?.querySelector(".provider-account-quota");
+              if (quota) loadQuota(account, quota);
+            });
+          }
+        })
+        .catch(() => { list.classList.remove("is-loading"); list.textContent = text("Không thể tải tài khoản.", "Unable to load accounts."); });
+    };
+    pool.querySelector(".js-add-provider-account")?.addEventListener("click", resetForm);
+    pool.querySelector(".js-refresh-provider-accounts")?.addEventListener("click", refresh);
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(form).entries());
+      if (pool.dataset.providerType === "codex") data.id = ensureAccountID();
+      data.enabled = form.querySelector('[name="enabled"]').checked;
+      data.priority = Number(data.priority) || 1;
+      if (Object.prototype.hasOwnProperty.call(data, "quota_limit_percent")) data.quota_limit_percent = Number(data.quota_limit_percent) || 0;
+      try {
+        const response = await fetch(`/api/provider-accounts?provider_id=${encodeURIComponent(providerID)}`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(data) });
+        const payload = await safeJSON(response);
+        if (!response.ok) throw new Error(payload.error || payload.message || `HTTP ${response.status}`);
+        if (result) result.textContent = "Account saved.";
+        refresh();
+        if (pool.dataset.providerType === "codex") {
+          setOAuthEnabled(true);
+          showToast("Account saved. Continue with OAuth below.");
+        } else {
+          closeModals();
+          showToast("Account saved.");
+        }
+      } catch (error) {
+        if (result) result.textContent = error.message || "Unable to save account.";
+        showToast(error.message || "Unable to save account.", false);
+      }
+    });
+    oauthOpen?.addEventListener("click", async () => {
+      const id = accountID();
+      if (!id) return;
+      oauthOpen.disabled = true;
+      try {
+        const params = new URLSearchParams({ json: "1", provider_id: providerID, account_id: id });
+        if (accountProxy()) params.set("proxy_url", accountProxy());
+        const res = await fetch(`/api/codex/oauth/start?${params}`, { method: "POST", cache: "no-store", headers: { Accept: "application/json" } });
+        const payload = await safeJSON(res);
+        if (!res.ok || !payload.auth_url) throw new Error(payload.message || payload.error || "OAuth authorization URL was not returned");
+        window.open(payload.auth_url, "_blank", "noopener,noreferrer");
+        showToast("OAuth opened in a new tab for this account.");
+      } catch (error) { showToast(error.message || "Unable to start OAuth.", false); }
+      finally { oauthOpen.disabled = false; }
+    });
+    oauthCreateLink?.addEventListener("click", async () => {
+      const id = accountID();
+      if (!id) return;
+      oauthCreateLink.disabled = true;
+      try {
+        const params = new URLSearchParams({ json: "1", provider_id: providerID, account_id: id });
+        if (accountProxy()) params.set("proxy_url", accountProxy());
+        const res = await fetch(`/api/codex/oauth/start?${params}`, { method: "POST", cache: "no-store", headers: { Accept: "application/json" } });
+        const payload = await safeJSON(res);
+        if (!res.ok || !payload.auth_url) throw new Error(payload.message || payload.error || "OAuth authorization URL was not returned");
+        if (oauthAuthLink) oauthAuthLink.value = payload.auth_url;
+        if (oauthManual) oauthManual.hidden = false;
+      } catch (error) { showToast(error.message || "Unable to create OAuth link.", false); }
+      finally { oauthCreateLink.disabled = false; }
+    });
+    form?.querySelector(".js-account-oauth-copy-link")?.addEventListener("click", () => navigator.clipboard?.writeText(oauthAuthLink?.value || ""));
+    form?.querySelector(".js-account-oauth-complete")?.addEventListener("click", async (event) => {
+      const callbackURL = oauthCallbackLink?.value || "";
+      event.currentTarget.disabled = true;
+      try {
+        const res = await fetch("/api/codex/oauth/complete", { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ callback_url: callbackURL }) });
+        const payload = await safeJSON(res);
+        if (!res.ok) throw new Error(payload.message || payload.error || "OAuth completion failed");
+        refresh();
+        closeModals();
+        showToast("OAuth connected to this account.");
+      } catch (error) { showToast(error.message || "OAuth completion failed.", false); }
+      finally { event.currentTarget.disabled = false; }
+    });
+    refresh();
+  });
+
   document.querySelectorAll(".provider-detail-model-filter").forEach((input) => {
     input.addEventListener("input", () => {
       const section = input.closest(".provider-detail-section") || document;
@@ -440,7 +836,7 @@ function initUsageChart() {
       const barW = Math.max(3, slot * .68);
       const y = height - padY - h;
       const grad = ctx.createLinearGradient(0, y, 0, height - padY);
-      grad.addColorStop(0, "#67e8f9"); grad.addColorStop(1, "#8b5cf6");
+      grad.addColorStop(0, "#5cc0ea"); grad.addColorStop(1, "#6a74f0");
       ctx.fillStyle = grad;
       ctx.fillRect(x, y, barW, h);
       geometry.push({ x, y, w: barW, h, bucket: buckets[i], value: v });
@@ -501,7 +897,7 @@ function randomHex(bytes) {
   return [...arr].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 function generateSecretKey() { return `sk-${randomHex(24)}`; }
-function defaultAPIKeyID() { return `key-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}`; }
+function defaultAPIKeyID() { return `key-${Date.now()}`; }
 
 function initAPIKeyManager() {
   const form = document.getElementById("api-keys-form");
@@ -510,11 +906,75 @@ function initAPIKeyManager() {
   const rows = () => (textarea.value || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => l.split("|"));
   const write = (list) => { textarea.value = list.map((r) => r.join("|")).join("\n"); };
   const field = (name) => document.querySelector(`[data-new-api-key="${name}"]`);
+  const list = document.querySelector("[data-api-key-list]");
+  const directory = document.querySelector(".api-key-directory");
+  const search = document.querySelector("[data-api-key-search]");
+  const filter = document.querySelector("[data-api-key-filter]");
+  const sort = document.querySelector("[data-api-key-sort]");
+  const noResults = document.querySelector("[data-api-key-no-results]");
+  const resetPolicyModal = () => {
+    ["id", "key", "models", "requests", "tokens", "usd", "rpm", "concurrent"].forEach((name) => { const input = field(name); if (input) input.value = ""; });
+    const editing = field("editing");
+    const enabled = field("enabled");
+    if (editing) editing.value = "";
+    if (enabled) enabled.value = "true";
+  };
+  document.querySelectorAll('[data-open-modal="api-key-policy-modal"]').forEach((button) => button.addEventListener("click", () => {
+    if (!button.closest("[data-api-key-card]")) resetPolicyModal();
+  }));
+  const format = (value) => new Intl.NumberFormat().format(Number(value || 0));
+  const updateKPIs = () => {
+    const cards = Array.from(document.querySelectorAll("[data-api-key-card]"));
+    const total = cards.length;
+    const active = cards.filter((card) => card.dataset.apiKeyEnabled === "true").length;
+    const aggregate = (name) => cards.reduce((sum, card) => sum + Number(card.dataset[`apiKey${name}`] || 0), 0);
+    const set = (name, value) => { const node = document.querySelector(`[data-api-key-kpi="${name}"]`); if (node) node.textContent = value; };
+    set("total", format(total));
+    set("active", format(active));
+    set("requests", format(aggregate("Requests")));
+    set("tokens", format(aggregate("Tokens")));
+  };
+  const refreshDirectory = () => {
+    if (!list) return;
+    const query = (search?.value || "").trim().toLowerCase();
+    const state = filter?.value || "all";
+    const cards = Array.from(list.querySelectorAll("[data-api-key-card]"));
+    cards.forEach((card) => {
+      const enabled = card.dataset.apiKeyEnabled === "true";
+      const matchesQuery = !query || (card.dataset.apiKeySearch || "").toLowerCase().includes(query);
+      const matchesState = state === "all" || (state === "active" && enabled) || (state === "disabled" && !enabled);
+      card.hidden = !(matchesQuery && matchesState);
+    });
+    const sortBy = sort?.value || "default";
+    const visible = cards.filter((card) => !card.hidden);
+    if (sortBy !== "default") {
+      visible.sort((a, b) => {
+        if (sortBy === "id") return (a.dataset.apiKeyId || "").localeCompare(b.dataset.apiKeyId || "");
+        const names = { requests: "apiKeyRequests", tokens: "apiKeyTokens", cost: "apiKeyCost" };
+        return Number(b.dataset[names[sortBy]] || 0) - Number(a.dataset[names[sortBy]] || 0);
+      }).forEach((card) => list.appendChild(card));
+    }
+    if (noResults) noResults.hidden = visible.length > 0 || cards.length === 0;
+  };
+  updateKPIs();
+  refreshDirectory();
+  search?.addEventListener("input", refreshDirectory);
+  filter?.addEventListener("change", refreshDirectory);
+  sort?.addEventListener("change", refreshDirectory);
+  document.querySelectorAll("[data-api-key-view]").forEach((button) => button.addEventListener("click", () => {
+    const view = button.dataset.apiKeyView || "list";
+    directory?.classList.toggle("is-grid", view === "grid");
+    document.querySelectorAll("[data-api-key-view]").forEach((node) => {
+      const active = node === button;
+      node.classList.toggle("is-active", active);
+      node.setAttribute("aria-pressed", String(active));
+    });
+  }));
   document.addEventListener("click", (event) => {
     const copy = event.target.closest(".js-copy-api-key");
     if (copy) { navigator.clipboard?.writeText(copy.closest("[data-api-key-card]")?.querySelector(".api-key-secret")?.textContent || ""); showToast("API key copied"); return; }
     const edit = event.target.closest(".js-edit-api-key");
-    if (edit) { const c = edit.closest("[data-api-key-card]"); ["id","key","models","requests","tokens","usd"].forEach((k) => { const el = field(k); const old = c?.querySelector(`[data-api-key-field="${k}"]`); if (el && old) el.value = old.value; }); const editing = field("editing"); if (editing) editing.value = field("id")?.value || ""; openModal("api-key-policy-modal"); return; }
+    if (edit) { const c = edit.closest("[data-api-key-card]"); ["id","key","models","requests","tokens","usd","enabled"].forEach((k) => { const el = field(k); const old = c?.querySelector(`[data-api-key-field="${k}"]`); if (el && old) el.value = old.value; }); const editing = field("editing"); if (editing) editing.value = field("id")?.value || ""; openModal("api-key-policy-modal"); return; }
     const toggle = event.target.closest(".js-toggle-api-key");
     if (toggle) { const id = toggle.closest("[data-api-key-card]")?.querySelector('[data-api-key-field="id"]')?.value || ""; write(rows().map((r) => { if (r[0] === id) r[6] = String(String(r[6]).toLowerCase() !== "true"); return r; })); form.requestSubmit(); return; }
     const remove = event.target.closest(".js-remove-api-key");
@@ -534,8 +994,11 @@ function initAPIKeyManager() {
       const requests = (field("requests")?.value || "0").trim() || "0";
       const tokens = (field("tokens")?.value || "0").trim() || "0";
       const usd = (field("usd")?.value || "0").trim() || "0";
+      const rpm = (field("rpm")?.value || "0").trim() || "0";
+      const concurrent = (field("concurrent")?.value || "0").trim() || "0";
+      const enabled = (field("enabled")?.value || "true").trim() || "true";
       const list = rows().filter((r) => r[0] !== editing && r[0] !== id);
-      list.push([id, key, models, requests, tokens, usd, "true"]);
+      list.push([id, key, models, requests, tokens, usd, enabled, rpm, concurrent]);
       write(list);
       form.requestSubmit();
     }
@@ -570,7 +1033,7 @@ function initPricingManager() {
     }
     refreshAllButton();
   };
-  const cardPairs = (card) => (card?.querySelector('[data-pricing-field="pairs"]')?.value || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => { const [provider, model] = line.split("|"); return {provider, model}; }).filter((x) => x.provider && x.model);
+  const cardPairs = (card) => (card?.querySelector('[data-pricing-field="pairs"]')?.value || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => { const [provider, model] = line.split("|"); return {provider: provider || "", model}; }).filter((x) => x.model);
   const clearSelection = (block) => {
     block?.querySelectorAll(".js-configure-pricing.is-selected").forEach((el) => el.classList.remove("is-selected"));
     refreshBulkButton(block);
@@ -588,7 +1051,7 @@ function initPricingManager() {
     const remove = event.target.closest(".js-remove-pricing");
     if (remove) { event.preventDefault(); const pairs = cardPairs(remove.closest("[data-pricing-card]")); write(rows().filter((r) => !pairs.some((p) => p.provider === r[0] && p.model === r[1]))); form.requestSubmit(); return; }
     const add = event.target.closest(".js-add-model-pricing");
-    if (add) { event.preventDefault(); const pairs = pendingPricingPairs?.length ? pendingPricingPairs : splitCSV(field("provider")?.value).flatMap((provider) => splitCSV(field("model")?.value).map((model) => ({provider, model}))); if (!pairs.length) { showToast("Provider and model are required", false); return; } const list = rows().filter((r) => !pairs.some((p) => p.provider === r[0] && p.model === r[1])); for (const {provider, model} of pairs) list.push([provider, model, field("input")?.value || "0", field("output")?.value || "0", field("cached")?.value || "0", field("reasoning")?.value || "0", field("context")?.value || "0", field("rpm")?.value || "0", field("tpm")?.value || "0", field("daily_requests")?.value || "0", field("daily_tokens")?.value || "0"]); write(list); form.requestSubmit(); }
+    if (add) { event.preventDefault(); const providerValues = splitCSV(field("provider")?.value); const modelValues = splitCSV(field("model")?.value); const pairs = pendingPricingPairs?.length ? pendingPricingPairs : (providerValues.length ? providerValues : [""]).flatMap((provider) => modelValues.map((model) => ({provider, model}))); if (!pairs.length) { showToast("Model is required", false); return; } const list = rows().filter((r) => !pairs.some((p) => (p.provider || "") === (r[0] || "") && p.model === r[1])); for (const {provider, model} of pairs) list.push([provider || "", model, field("input")?.value || "0", field("output")?.value || "0", field("cached")?.value || "0", field("reasoning")?.value || "0", field("context")?.value || "0", field("rpm")?.value || "0", field("tpm")?.value || "0", field("daily_requests")?.value || "0", field("daily_tokens")?.value || "0"]); write(list); form.requestSubmit(); }
   });
   field("provider")?.addEventListener("input", () => { pendingPricingPairs = null; });
   field("model")?.addEventListener("input", () => { pendingPricingPairs = null; });
@@ -616,6 +1079,26 @@ function initComboBuilder() {
   render();
 }
 function initAPIKeyQuotas() { document.querySelectorAll(".api-key-quota").forEach((el) => { const used = Number(el.dataset.used || 0), limit = Number(el.dataset.limit || 0); const pct = limit > 0 ? Math.max(0, Math.min(100, used / limit * 100)) : 0; const bar = el.querySelector("i"); if (bar) { bar.style.display = "block"; bar.style.width = `${pct}%`; } }); }
+function initDashboardQuickStart() {
+  const base = document.querySelector("[data-dashboard-base-url]");
+  if (!base) return;
+  const baseURL = window.location.origin;
+  base.textContent = baseURL;
+  const status = document.querySelector("[data-dashboard-copy-status]");
+  const copy = async (value, button) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      document.querySelectorAll(".dashboard-copy-button.is-copied").forEach((el) => el.classList.remove("is-copied"));
+      button?.classList.add("is-copied");
+      if (status) status.textContent = t("dashboard.copied", "Copied");
+      setTimeout(() => { button?.classList.remove("is-copied"); if (status) status.textContent = ""; }, 1800);
+    } catch (_) {
+      if (status) status.textContent = value;
+    }
+  };
+  document.querySelector("[data-copy-base]")?.addEventListener("click", (event) => copy(baseURL, event.currentTarget));
+  document.querySelectorAll("[data-copy-endpoint]").forEach((button) => button.addEventListener("click", () => copy(`${baseURL}${button.dataset.copyEndpoint}`, button)));
+}
 function initRestoreGuard() {
   document.querySelectorAll('form[action*="restore"], form[data-restore-form]').forEach((form) => form.addEventListener("submit", (event) => { if (!confirm("Restore database? This will overwrite current data after creating a safety backup.")) event.preventDefault(); }));
   document.querySelectorAll('form[action*="reset-data"], form[data-reset-data-form]').forEach((form) => form.addEventListener("submit", (event) => {

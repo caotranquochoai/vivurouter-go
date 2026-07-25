@@ -1,0 +1,43 @@
+{{template "layout_start" .}}
+<section class="providers-hero dashboard-hero-modern">
+  <div>
+    <p class="eyebrow">Data safety</p>
+    <h1>{{if eq .Lang "vi"}}Quản lý dữ liệu{{else}}Data management{{end}}</h1>
+    <p>{{if eq .Lang "vi"}}Sao lưu, nhập DB và xóa toàn bộ dữ liệu cục bộ của VivuRouter.{{else}}Back up, restore, and reset the local VivuRouter database.{{end}}</p>
+  </div>
+  <div class="dashboard-status-pill"><span>Backend</span><strong>{{.Config.StoreBackend}}</strong></div>
+</section>
+
+<div class="settings-modern-grid data-management-page">
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">Backup</p><h2>{{if eq .Lang "vi"}}Sao lưu DB{{else}}Database backup{{end}}</h2><p>{{if eq .Lang "vi"}}Tải bản sao lưu DB hiện tại trước khi sửa/xóa dữ liệu.{{else}}Download a copy of the current database before changing or deleting data.{{end}}</p></div>
+      <a class="btn-secondary" href="/api/admin/backup">{{if eq .Lang "vi"}}Tải backup{{else}}Download backup{{end}}</a>
+    </div>
+    <p class="muted-text">{{if eq .Lang "vi"}}File tải xuống là store đang dùng:{{else}}The downloaded file is the active store:{{end}} <code>{{if eq .Config.StoreBackend "sqlite"}}sample.sqlite{{else}}sample-db.json{{end}}</code>.</p>
+  </section>
+
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">Restore</p><h2>{{if eq .Lang "vi"}}Nhập / khôi phục DB{{else}}Import / restore DB{{end}}</h2><p>{{if eq .Lang "vi"}}Ghi đè DB hiện tại bằng file backup đã chọn.{{else}}Replace the current database with an uploaded backup file.{{end}}</p></div>
+    </div>
+    <form class="form-grid" method="post" action="/api/admin/restore" enctype="multipart/form-data">
+      <label class="wide">{{if eq .Lang "vi"}}File backup{{else}}Backup file{{end}}<input name="db_file" type="file" required></label>
+      <p class="wide provider-warning provider-warning-danger">{{if eq .Lang "vi"}}Restore sẽ tạo safety backup trước, sau đó ghi đè DB hiện tại. Sau khi restore hãy restart server.{{else}}Restore creates a safety backup first, then overwrites the active DB. Restart the server after restoring.{{end}}</p>
+      <label class="wide">{{if eq .Lang "vi"}}Nhập RESTORE để xác nhận{{else}}Type RESTORE to confirm{{end}}<input name="confirm" autocomplete="off" placeholder="RESTORE" required></label>
+      <div class="form-actions wide"><button type="submit" class="btn-danger">{{if eq .Lang "vi"}}Khôi phục DB{{else}}Restore DB{{end}}</button></div>
+    </form>
+  </section>
+
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">Danger zone</p><h2>{{if eq .Lang "vi"}}Xóa toàn bộ dữ liệu DB{{else}}Delete all DB data{{end}}</h2><p>{{if eq .Lang "vi"}}Xóa sạch dữ liệu và seed lại trạng thái mặc định.{{else}}Clear all data and seed the default state again.{{end}}</p></div>
+    </div>
+    <form class="form-grid" method="post" action="/api/admin/reset-data">
+      <p class="wide provider-warning provider-warning-danger">{{if eq .Lang "vi"}}Hành động này xóa settings, providers, proxy, API key, pricing, combo, prompt router, fusion, request logs, debug payload, chi phí và hóa đơn. Không thể hoàn tác. Hệ thống sẽ cố tạo safety backup trước khi xóa.{{else}}This deletes settings, providers, proxies, API keys, pricing, combos, prompt routers, fusions, request logs, debug payloads, costs, and invoices. It cannot be undone. The server will try to create a safety backup first.{{end}}</p>
+      <label class="wide">{{if eq .Lang "vi"}}Nhập DELETE ALL DATA để xác nhận{{else}}Type DELETE ALL DATA to confirm{{end}}<input name="confirm" autocomplete="off" placeholder="DELETE ALL DATA" required></label>
+      <div class="form-actions wide"><button type="submit" class="btn-danger">{{if eq .Lang "vi"}}Xóa toàn bộ dữ liệu{{else}}Delete all data{{end}}</button></div>
+    </form>
+  </section>
+</div>
+{{template "layout_end" .}}

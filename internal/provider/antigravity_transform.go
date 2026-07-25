@@ -35,24 +35,29 @@ func antigravityRequest(model string, body map[string]any, sessionID string) map
 
 func antigravityContents(value any) []any {
 	messages := normalizeChatMessages(value)
+	toolNames := antigravityToolCallNames(messages)
 	contents := make([]any, 0, len(messages))
 	for _, msg := range messages {
 		role := strings.TrimSpace(asString(msg["role"]))
 		if role == "system" {
 			continue
 		}
+		if role == "tool" {
+			if responses := antigravityFunctionResponses(msg, toolNames); len(responses) > 0 {
+				contents = append(contents, map[string]any{"role": "user", "parts": responses})
+			}
+			continue
+		}
 		agRole := role
 		if role == "assistant" {
 			agRole = "model"
 		}
-		if agRole == "" || agRole == "tool" {
+		if agRole == "" {
 			agRole = "user"
 		}
 		parts := antigravityPartsFromContent(msg["content"])
-		if len(parts) == 0 {
-			if calls := antigravityFunctionCalls(msg["tool_calls"]); len(calls) > 0 {
-				parts = calls
-			}
+		if calls := antigravityFunctionCalls(msg["tool_calls"]); len(calls) > 0 {
+			parts = append(parts, calls...)
 		}
 		if len(parts) == 0 {
 			continue
@@ -60,6 +65,50 @@ func antigravityContents(value any) []any {
 		contents = append(contents, map[string]any{"role": agRole, "parts": parts})
 	}
 	return contents
+}
+
+func antigravityToolCallNames(messages []map[string]any) map[string]string {
+	names := map[string]string{}
+	for _, msg := range messages {
+		for _, item := range asAnySlice(msg["tool_calls"]) {
+			call, _ := item.(map[string]any)
+			id := strings.TrimSpace(asString(call["id"]))
+			fn, _ := call["function"].(map[string]any)
+			name := strings.TrimSpace(asString(fn["name"]))
+			if id != "" && name != "" {
+				names[id] = sanitizeAntigravityFunctionName(name)
+			}
+		}
+	}
+	return names
+}
+
+func antigravityFunctionResponses(msg map[string]any, toolNames map[string]string) []any {
+	callID := strings.TrimSpace(asString(msg["tool_call_id"]))
+	name := strings.TrimSpace(asString(msg["name"]))
+	if name == "" {
+		name = toolNames[callID]
+	}
+	if name == "" {
+		return nil
+	}
+	var result any
+	content := chatContentText(msg["content"])
+	if content == "" {
+		result = map[string]any{}
+	} else if err := json.Unmarshal([]byte(content), &result); err != nil {
+		result = map[string]any{"content": content}
+	}
+	response := map[string]any{"name": sanitizeAntigravityFunctionName(name), "response": map[string]any{"result": result}}
+	if callID != "" {
+		response["id"] = callID
+	}
+	return []any{map[string]any{"functionResponse": response}}
+}
+
+func asAnySlice(value any) []any {
+	items, _ := value.([]any)
+	return items
 }
 
 func antigravitySystemInstruction(value any) string {

@@ -18,7 +18,7 @@ func TestBuildDebugPayloadStoresCompactToolResult(t *testing.T) {
 			},
 		},
 	}
-	payload := buildDebugPayload(store.Settings{SaveRawToolResult: true, MaskDebugSecrets: true, CompactDebugPayloads: true, MaxDebugPayloadBytes: 24 * 1024}, body)
+	payload := buildDebugPayload(store.Settings{SaveRawToolResult: true, MaskDebugSecrets: true, CompactDebugPayloads: true, MaxDebugPayloadBytes: 24 * 1024}, body, "")
 	if payload == nil {
 		t.Fatal("expected debug payload")
 	}
@@ -35,7 +35,7 @@ func TestBuildDebugPayloadStoresCompactToolResult(t *testing.T) {
 
 func TestBuildDebugPayloadStoresCompactPrompt(t *testing.T) {
 	body := map[string]any{"messages": []any{map[string]any{"role": "user", "content": strings.Repeat("x", 9000)}}}
-	payload := buildDebugPayload(store.Settings{SaveRawPrompt: true, MaskDebugSecrets: true, CompactDebugPayloads: true, MaxDebugPayloadBytes: 24 * 1024}, body)
+	payload := buildDebugPayload(store.Settings{SaveRawPrompt: true, MaskDebugSecrets: true, CompactDebugPayloads: true, MaxDebugPayloadBytes: 24 * 1024}, body, "")
 	if payload == nil {
 		t.Fatal("expected debug payload")
 	}
@@ -44,5 +44,17 @@ func TestBuildDebugPayloadStoresCompactPrompt(t *testing.T) {
 	}
 	if payload.EstimatedPromptTokensSaved <= 0 {
 		t.Fatalf("expected positive prompt token savings")
+	}
+}
+
+func TestBuildDebugPayloadStoresRedactedResponse(t *testing.T) {
+	body := map[string]any{"model": "test"}
+	response := `{"content":"ok","api_key":"sk-local-secret-value-123456"}`
+	payload := buildDebugPayload(store.Settings{SaveRawResponse: true, MaxDebugPayloadBytes: 24 * 1024}, body, response)
+	if payload == nil || payload.RawResponse == "" || payload.RawResponseBytes == 0 {
+		t.Fatalf("expected response payload: %+v", payload)
+	}
+	if strings.Contains(payload.RawResponse, "secret-value") || !strings.Contains(payload.RawResponse, "REDACTED") {
+		t.Fatalf("response was not redacted: %q", payload.RawResponse)
 	}
 }

@@ -36,24 +36,9 @@ func (e *OpenAIExecutor) ExecuteChat(ctx context.Context, provider store.Provide
 		req.Header.Set("Accept", "text/event-stream")
 	}
 
-	usedKeyID := ""
-	if e.KeyPool != nil {
-		if key := e.KeyPool.SelectKey(provider); key != nil {
-			req.Header.Set("Authorization", "Bearer "+key.Key)
-			usedKeyID = key.ID
-		}
-	}
-	if usedKeyID == "" {
-		// Fall back to legacy single-key fields.
-		if provider.APIKey != "" {
-			req.Header.Set("Authorization", "Bearer "+provider.APIKey)
-			usedKeyID = "legacy"
-		} else if provider.AccessToken != "" {
-			req.Header.Set("Authorization", "Bearer "+provider.AccessToken)
-			usedKeyID = "legacy"
-		} else {
-			return nil, fmt.Errorf("provider %s has no API key or access token", provider.ID)
-		}
+	usedKeyID, err := e.authorize(req, provider)
+	if err != nil {
+		return nil, err
 	}
 
 	client, err := clientForProvider(e.Client, provider)
@@ -65,6 +50,24 @@ func (e *OpenAIExecutor) ExecuteChat(ctx context.Context, provider store.Provide
 		return nil, err
 	}
 	return &ExecuteResult{Response: resp, URL: url, TransformedBody: transformed, UsedKeyID: usedKeyID}, nil
+}
+
+func (e *OpenAIExecutor) authorize(req *http.Request, provider store.Provider) (string, error) {
+	if e.KeyPool != nil {
+		if key := e.KeyPool.SelectKey(provider); key != nil {
+			req.Header.Set("Authorization", "Bearer "+key.Key)
+			return key.ID, nil
+		}
+	}
+	if provider.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+provider.APIKey)
+		return "legacy", nil
+	}
+	if provider.AccessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+provider.AccessToken)
+		return "legacy", nil
+	}
+	return "", fmt.Errorf("provider %s has no API key or access token", provider.ID)
 }
 
 func cloneBody(body map[string]any) map[string]any {

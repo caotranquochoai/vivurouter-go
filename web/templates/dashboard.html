@@ -91,7 +91,7 @@
       </tbody>
     </table>
   </div>
-  <p class="muted-text usage-stats-empty" id="usage-stats-empty" style="text-align: center; padding: 2rem 0;" hidden>No usage data available.</p>
+  <p class="muted-text usage-stats-empty text-center" id="usage-stats-empty" hidden>No usage data available.</p>
 </section>
 <script>window.VivuRouterUsageTable={{json .UsageTable}};</script>
 
@@ -176,41 +176,82 @@
 </section>
 {{end}}
 
-<section class="dashboard-modern-grid analytics-secondary-integrated">
-  <article class="panel dashboard-panel-side">
-    <p class="eyebrow">{{tr .T "dashboard.api_keys"}}</p>
-    <h2>{{tr .T "dashboard.quota_status"}}</h2>
-    {{range .Settings.APIKeys}}
-      <div class="quota-mini-row">
-        <strong>{{.ID}}</strong>
-        <span>{{fmtTokens .UsedRequests}}/{{if .MaxRequests}}{{fmtTokens .MaxRequests}}{{else}}∞{{end}} rq</span>
-        <span>${{printf "%.4f" .UsedCostUSD}}/{{if .MaxCostUSD}}${{printf "%.2f" .MaxCostUSD}}{{else}}∞{{end}}</span>
+<section class="panel api-access-workspace">
+  <header class="api-access-hero">
+    <div class="api-access-hero-icon" aria-hidden="true">⌘</div>
+    <div class="api-access-hero-copy">
+      <p class="eyebrow">{{tr .T "dashboard.api_keys"}}</p>
+      <h2>{{tr .T "dashboard.api_access"}}</h2>
+      <p>{{tr .T "dashboard.api_access_hint"}}</p>
+    </div>
+    <a class="btn-primary api-access-manage" href="/api-keys">⚙ {{tr .T "dashboard.manage_api_keys"}}</a>
+  </header>
+
+  <div class="api-access-layout">
+    <div class="api-access-main">
+      <div class="api-access-summary">
+        <div class="api-summary-item">
+          <span class="api-summary-icon is-key" aria-hidden="true">⌘</span>
+          <div><small>{{tr .T "dashboard.total_api_keys"}}</small><strong>{{.APIKeySummary.Total}}</strong><em>{{.APIKeySummary.Active}} {{tr .T "dashboard.keys_active"}}</em></div>
+        </div>
+        <div class="api-summary-item">
+          <span class="api-summary-icon is-request" aria-hidden="true">↗</span>
+          <div><small>{{tr .T "dashboard.total_requests"}}</small><strong>{{fmtTokens .APIKeySummary.Requests}} <b>/ ∞</b></strong><em>{{tr .T "dashboard.all_time"}}</em></div>
+        </div>
+        <div class="api-summary-item">
+          <span class="api-summary-icon is-cost" aria-hidden="true">◎</span>
+          <div><small>{{tr .T "dashboard.total_cost"}}</small><strong>${{printf "%.2f" .APIKeySummary.CostUSD}} <b>/ ∞</b></strong><em>{{tr .T "dashboard.all_time"}}</em></div>
+        </div>
       </div>
-    {{else}}
-      <p>{{tr .T "dashboard.no_api_quota"}}</p>
-    {{end}}
-    <a class="btn-secondary" href="/settings">{{tr .T "dashboard.manage_keys_pricing"}}</a>
-  </article>
 
-  <article class="panel dashboard-panel-side">
-    <p class="eyebrow">{{tr .T "dashboard.runtime"}}</p>
-    <h2>{{tr .T "dashboard.upstream_health"}}</h2>
-    <p>{{tr .T "dashboard.upstream_errors"}}: <strong>{{.Metrics.UpstreamFails}}</strong></p>
-    <p>{{tr .T "dashboard.uptime"}}: <code>{{.UptimeLabel}}</code></p>
-    {{if .Cooldowns}}
-      {{range .Cooldowns}}<p><code>{{.ProviderID}}</code> {{if eq $.Lang "vi"}}còn{{else}}remaining{{end}} {{.RemainingMS}}ms <small>({{.Reason}})</small></p>{{end}}
-    {{else}}
-      <p>{{tr .T "dashboard.no_cooldowns"}}</p>
-    {{end}}
-  </article>
+      <div class="api-key-directory">
+        <div class="api-key-directory-head">
+          <div><p class="eyebrow">{{tr .T "dashboard.api_key_directory"}}</p><h3>{{tr .T "dashboard.key_usage_overview"}}</h3></div>
+          <span class="dashboard-count-badge">{{.APIKeySummary.Total}}</span>
+        </div>
+        <div class="api-key-table-head" aria-hidden="true">
+          <span>{{tr .T "dashboard.api_key"}}</span><span>{{tr .T "dashboard.status"}}</span><span>{{tr .T "dashboard.requests"}}</span><span>{{tr .T "dashboard.cost"}}</span><span>{{tr .T "dashboard.models"}}</span>
+        </div>
+        <div class="api-key-table-body">
+          {{range .Settings.APIKeys}}
+          <div class="api-key-table-row">
+            <div class="api-key-identity"><span class="api-key-avatar" aria-hidden="true">⌘</span><div><strong title="{{.ID}}">{{.ID}}</strong><small>{{if .AllowedModels}}{{len .AllowedModels}} {{tr $.T "dashboard.allowed_models"}}{{else}}{{tr $.T "dashboard.all_models"}}{{end}}</small></div></div>
+            <div>{{if .Enabled}}<span class="dashboard-status-badge is-ok">{{tr $.T "dashboard.active"}}</span>{{else}}<span class="dashboard-status-badge is-muted">{{tr $.T "dashboard.disabled"}}</span>{{end}}</div>
+            <div class="api-key-meter"><strong>{{fmtTokens .UsedRequests}} / {{if .MaxRequests}}{{fmtTokens .MaxRequests}}{{else}}∞{{end}}</strong><div class="api-key-quota dashboard-quota-track" data-used="{{.UsedRequests}}" data-limit="{{.MaxRequests}}"><i></i></div></div>
+            <div class="api-key-meter"><strong>${{printf "%.4f" .UsedCostUSD}} / {{if .MaxCostUSD}}${{printf "%.2f" .MaxCostUSD}}{{else}}∞{{end}}</strong><div class="api-key-quota dashboard-quota-track cost" data-used="{{.UsedCostUSD}}" data-limit="{{.MaxCostUSD}}"><i></i></div></div>
+            <div class="api-key-models">{{if .AllowedModels}}{{len .AllowedModels}}{{else}}∞{{end}}<a href="/api-keys" aria-label="{{tr $.T "dashboard.manage_api_keys"}}">•••</a></div>
+          </div>
+          {{else}}
+          <div class="dashboard-empty-state"><strong>{{tr .T "dashboard.no_api_quota"}}</strong><span>{{tr .T "dashboard.create_key_hint"}}</span><a class="btn-secondary" href="/api-keys">{{tr .T "dashboard.manage_api_keys"}}</a></div>
+          {{end}}
+        </div>
+      </div>
+    </div>
 
-  <article class="panel dashboard-panel-side">
-    <p class="eyebrow">{{tr .T "dashboard.quick_endpoints"}}</p>
-    <h2>{{tr .T "dashboard.sample_endpoint"}}</h2>
-    <pre><code>GET  /v1/models
-POST /v1/chat/completions
-POST /v1/responses
-GET  /api/usage/stats</code></pre>
-  </article>
+    <aside class="api-access-sidebar">
+      <article class="dashboard-utility-card dashboard-health-card">
+        <div class="dashboard-card-head">
+          <div><p class="eyebrow">{{tr .T "dashboard.gateway_health"}}</p><h3>{{if .Cooldowns}}{{tr .T "dashboard.degraded"}}{{else}}{{tr .T "dashboard.healthy"}}{{end}}</h3></div>
+          <span class="health-shield {{if .Cooldowns}}is-warn{{else}}is-ok{{end}}" aria-hidden="true">◇</span>
+        </div>
+        <div class="health-detail-list">
+          <div><span>{{tr .T "dashboard.uptime"}}</span><strong>{{.UptimeLabel}}</strong></div>
+          <div><span>{{tr .T "dashboard.upstream_errors"}}</span><strong>{{.Metrics.UpstreamFails}}</strong></div>
+          <div><span>{{tr .T "dashboard.active_cooldowns"}}</span><strong>{{len .Cooldowns}}</strong></div>
+        </div>
+        {{if .Cooldowns}}<div class="dashboard-cooldown-list">{{range .Cooldowns}}<div class="dashboard-cooldown-row"><div><code title="{{.ProviderID}}">{{.ProviderID}}</code><small title="{{.Reason}}">{{.Reason}}</small></div><strong>{{fmtDurationMS .RemainingMS}}</strong></div>{{end}}</div>{{else}}<p class="health-ok-note">● {{tr .T "dashboard.no_cooldowns"}}</p>{{end}}
+        <div class="dashboard-card-actions"><a class="btn-secondary" href="/providers">{{tr .T "dashboard.view_providers"}}</a><a class="dashboard-text-link" href="/requests">{{tr .T "dashboard.view_errors"}}</a></div>
+      </article>
+
+      <article class="dashboard-utility-card dashboard-endpoints-card">
+        <div class="dashboard-card-head"><div><p class="eyebrow">{{tr .T "dashboard.quick_endpoints"}}</p><h3>{{tr .T "dashboard.developer_quick_start"}}</h3></div>{{if .Config.RequireAPIKey}}<span class="dashboard-status-badge is-info">Bearer</span>{{end}}</div>
+        <p class="dashboard-card-intro">{{tr .T "dashboard.endpoint_hint"}}</p>
+        <div class="dashboard-base-url"><span>{{tr .T "dashboard.base_url"}}</span><code data-dashboard-base-url>—</code><button type="button" class="dashboard-copy-button" data-copy-base aria-label="{{tr .T "dashboard.copy_base_url"}}">⧉</button></div>
+        <div class="dashboard-endpoint-group"><strong>{{tr .T "dashboard.gateway_api"}}</strong><div class="dashboard-endpoint-row"><span class="endpoint-method is-get">GET</span><code>/v1/models</code><button type="button" class="dashboard-copy-button" data-copy-endpoint="/v1/models" aria-label="{{tr .T "dashboard.copy_endpoint"}}">⧉</button></div><div class="dashboard-endpoint-row"><span class="endpoint-method is-post">POST</span><code>/v1/chat/completions</code><button type="button" class="dashboard-copy-button" data-copy-endpoint="/v1/chat/completions" aria-label="{{tr .T "dashboard.copy_endpoint"}}">⧉</button></div><div class="dashboard-endpoint-row"><span class="endpoint-method is-post">POST</span><code>/v1/responses</code><button type="button" class="dashboard-copy-button" data-copy-endpoint="/v1/responses" aria-label="{{tr .T "dashboard.copy_endpoint"}}">⧉</button></div></div>
+        <div class="dashboard-endpoint-group admin"><strong>{{tr .T "dashboard.admin_api"}}</strong><div class="dashboard-endpoint-row"><span class="endpoint-method is-get">GET</span><code>/api/usage/stats</code><button type="button" class="dashboard-copy-button" data-copy-endpoint="/api/usage/stats" aria-label="{{tr .T "dashboard.copy_endpoint"}}">⧉</button></div></div>
+        <div class="dashboard-card-actions"><a class="btn-secondary" href="/api-keys">{{tr .T "dashboard.view_api_keys"}}</a><span class="dashboard-copy-status" data-dashboard-copy-status aria-live="polite"></span></div>
+      </article>
+    </aside>
+  </div>
 </section>
 {{template "layout_end" .}}

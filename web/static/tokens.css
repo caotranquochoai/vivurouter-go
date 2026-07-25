@@ -1,0 +1,138 @@
+/* ==========================================================================
+   VivuRouter — Design Tokens
+   Refined dark theme: warm near-black, tamed cyan + indigo accent.
+   Semantic tokens so a light theme can be layered later without touching
+   component CSS. Everything downstream should consume var(--*), not raw hex.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Surfaces (warm near-black, less blue than the old #0b1020) ---- */
+  --bg:            #0e0f14;   /* app background base */
+  --bg-2:          #121319;   /* gradient partner for the page wash */
+  --surface:       #181a22;   /* primary card / panel */
+  --surface-2:     #14161d;   /* inset well (replaces the 59× rgba(8,13,25)) */
+  --surface-3:     #1e212b;   /* raised / hover surface */
+  --surface-alt:   #212430;   /* subtle contrast blocks (nav hover, chips) */
+
+  /* ---- Text ---- */
+  --text:          #e9ebf2;   /* body */
+  --text-strong:   #f6f8fc;   /* headings / emphasized numbers */
+  --muted:         #a2aabd;   /* secondary */
+  --muted-2:       #737b8f;   /* tertiary / disabled */
+
+  /* ---- Accent: tamed cyan + indigo ---- */
+  --accent:        #5cc0ea;   /* soft cyan (was neon #6ee7f9) */
+  --accent-strong: #7dd0f2;   /* brighter cyan for text-on-dark */
+  --accent-2:      #6a74f0;   /* indigo companion */
+  --accent-2-strong:#8b93f7;
+  --accent-soft:   rgba(92, 192, 234, 0.12);   /* tint bg */
+  --accent-soft-2: rgba(106, 116, 240, 0.12);
+  --accent-border: rgba(92, 192, 234, 0.34);
+  --accent-glow:   rgba(92, 192, 234, 0.20);
+  --grad-primary:  linear-gradient(120deg, #4bb2e6 0%, #6a74f0 100%);
+  --grad-accent-soft: linear-gradient(135deg, rgba(92,192,234,.16), rgba(106,116,240,.14));
+
+  /* ---- State colors + soft tints + borders (one system for all badges) ---- */
+  --ok:            #46c98a;
+  --ok-text:       #8fe3ba;
+  --ok-soft:       rgba(70, 201, 138, 0.13);
+  --ok-border:     rgba(70, 201, 138, 0.34);
+
+  --warn:          #e6b34d;
+  --warn-text:     #f2d492;
+  --warn-soft:     rgba(230, 179, 77, 0.13);
+  --warn-border:   rgba(230, 179, 77, 0.34);
+
+  --danger:        #e5695f;
+  --danger-text:   #f4b0aa;
+  --danger-soft:   rgba(229, 105, 95, 0.13);
+  --danger-border: rgba(229, 105, 95, 0.36);
+
+  --info:          #6a92f0;
+  --info-text:     #adc4f7;
+  --info-soft:     rgba(106, 146, 240, 0.14);
+  --info-border:   rgba(106, 146, 240, 0.34);
+
+  /* Domain accents (kept, but softened) */
+  --oauth:         #6a92f0;
+  --oauth-soft:    rgba(106, 146, 240, 0.14);
+  --oauth-border:  rgba(106, 146, 240, 0.34);
+  --apikey:        #e0955a;
+  --apikey-soft:   rgba(224, 149, 90, 0.14);
+  --apikey-border: rgba(224, 149, 90, 0.34);
+  --violet:        #9a86f2;
+  --violet-soft:   rgba(154, 134, 242, 0.16);
+  --violet-border: rgba(154, 134, 242, 0.34);
+
+  /* ---- Borders ---- */
+  --border:        #2a2e3b;   /* default hairline */
+  --border-soft:   rgba(255, 255, 255, 0.06);
+  --border-strong: #363b4b;
+
+  /* ---- Inputs ---- */
+  --field-bg:      #0f1117;
+  --field-border:  #2c3140;
+  --field-focus:   var(--accent-border);
+  --field-focus-ring: rgba(92, 192, 234, 0.16);
+
+  /* ---- Radius ---- */
+  --radius-xs:  6px;
+  --radius-sm:  9px;
+  --radius-md:  13px;
+  --radius-lg:  18px;
+  --radius-pill: 999px;
+
+  /* ---- Shadows (softer & smaller than old 0 20px 80px) ---- */
+  --shadow-sm:  0 1px 2px rgba(0,0,0,.24), 0 2px 8px rgba(0,0,0,.18);
+  --shadow-md:  0 6px 20px rgba(0,0,0,.28);
+  --shadow-lg:  0 14px 44px rgba(0,0,0,.34);
+  --shadow-focus: 0 0 0 3px var(--field-focus-ring);
+
+  /* ---- Spacing scale ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* ---- Typography ---- */
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Consolas, monospace;
+
+  --fs-xs:   0.75rem;   /* 12 */
+  --fs-sm:   0.82rem;   /* ~13 */
+  --fs-base: 0.9rem;    /* ~14.5 body */
+  --fs-md:   1rem;      /* 16 */
+  --fs-lg:   1.15rem;   /* card titles */
+  --fs-xl:   1.4rem;    /* section headers */
+  --fs-2xl:  1.75rem;   /* page title */
+  --fs-3xl:  2.1rem;    /* big stat numbers */
+
+  --lh-tight:  1.2;
+  --lh-normal: 1.5;
+
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ---- Layout ---- */
+  --sidebar-w: 244px;
+  --topbar-h: 60px;
+  --content-max: 1220px;
+
+  /* ---- Motion ---- */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 0.14s;
+  --dur: 0.2s;
+
+  /* ---- Legacy aliases (so pre-existing CSS referencing the old token
+         names resolves to the new palette without a rewrite) ---- */
+  --panel:  var(--surface);
+  --panel2: var(--surface-3);
+  --accent-legacy: var(--accent);
+}

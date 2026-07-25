@@ -1,0 +1,39 @@
+{{template "layout_start" .}}
+<section class="chat-studio" data-chat-studio data-lang="{{.Lang}}">
+  <header class="chat-studio-hero">
+    <div><p class="eyebrow">VivuRouter Playground</p><h2>{{tr .T "chat_studio.heading"}}</h2><p>{{tr .T "chat_studio.subtitle"}}</p></div>
+    <div class="media-security-note"><span>●</span><div><strong>{{tr .T "chat_studio.secure"}}</strong><small>{{tr .T "chat_studio.secure_hint"}}</small></div></div>
+  </header>
+
+  <div class="chat-studio-shell">
+    <aside class="chat-studio-settings">
+      <label class="chat-model-field">{{tr .T "chat_studio.model"}}
+        <input type="search" class="chat-model-search" data-chat-model-search placeholder="{{if eq .Lang "vi"}}Tìm model...{{else}}Search models...{{end}}" autocomplete="off">
+        <select data-chat-model>
+          <option value="">-- {{tr .T "chat_studio.select_model"}} --</option>
+          {{$group := ""}}{{range .ChatModels}}{{if ne .Group $group}}{{if ne $group ""}}</optgroup>{{end}}<optgroup label="{{.Group}}">{{$group = .Group}}{{end}}<option value="{{.Value}}">{{.Label}}</option>{{end}}{{if ne $group ""}}</optgroup>{{end}}
+        </select>
+      </label>
+      {{if not .ChatModels}}<p class="chat-studio-warning">{{tr .T "chat_studio.no_models"}}</p>{{end}}
+      <label>{{tr .T "chat_studio.system_prompt"}}<textarea rows="5" data-chat-system placeholder="{{tr .T "chat_studio.system_placeholder"}}"></textarea></label>
+      <div class="chat-studio-options">
+        <label>Temperature<input type="number" min="0" max="2" step="0.1" value="0.7" data-chat-temperature></label>
+        <label>Max tokens<input type="number" min="1" step="1" value="2048" data-chat-max-tokens></label>
+      </div>
+      <label class="chat-strict-option"><input type="checkbox" data-chat-disable-fallback><span><strong>{{tr .T "chat_studio.disable_fallback"}}</strong><small>{{tr .T "chat_studio.disable_fallback_hint"}}</small></span></label>
+      <button type="button" class="btn-secondary" data-chat-new>{{tr .T "chat_studio.new_chat"}}</button>
+    </aside>
+
+    <section class="chat-studio-conversation">
+      <div class="chat-messages" data-chat-messages aria-live="polite">
+        <div class="chat-empty" data-chat-empty><span>◇</span><h3>{{tr .T "chat_studio.empty_title"}}</h3><p>{{tr .T "chat_studio.empty_hint"}}</p></div>
+      </div>
+      <form class="chat-composer" data-chat-form>
+        <textarea rows="2" data-chat-input placeholder="{{tr .T "chat_studio.placeholder"}}" required></textarea>
+        <div class="chat-composer-actions"><span data-chat-status>{{tr .T "chat_studio.ready"}}</span><button type="button" class="btn-secondary" data-chat-stop disabled>{{tr .T "chat_studio.stop"}}</button><button type="submit" class="btn-primary" data-chat-send>{{tr .T "chat_studio.send"}}</button></div>
+      </form>
+    </section>
+  </div>
+</section>
+<script src="/static/chat-studio.js?v=20260725-no-fallback1"></script>
+{{template "layout_end" .}}

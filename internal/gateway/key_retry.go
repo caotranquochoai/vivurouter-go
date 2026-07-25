@@ -32,9 +32,20 @@ func (h *Handler) executeWithKeyRetry(
 		return result, err == nil, err
 	}
 
-	maxAttempts := keyRetryMaxBounds
-	if n := len(cand.Provider.Keys); n > maxAttempts {
-		maxAttempts = n
+	maxAttempts := 0
+	for _, key := range cand.Provider.Keys {
+		if key.Enabled && key.Key != "" {
+			maxAttempts++
+		}
+	}
+	if maxAttempts > keyRetryMaxBounds {
+		maxAttempts = keyRetryMaxBounds
+	}
+	if strictSingleAttempt(ctx) && maxAttempts > 1 {
+		maxAttempts = 1
+	}
+	if maxAttempts == 0 {
+		return nil, true, nil
 	}
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -49,6 +60,9 @@ func (h *Handler) executeWithKeyRetry(
 		}
 
 		if !isKeyRetryEligible(resp.StatusCode) {
+			return result, true, nil
+		}
+		if strictSingleAttempt(ctx) {
 			return result, true, nil
 		}
 

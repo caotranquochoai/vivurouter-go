@@ -1,6 +1,7 @@
 package store
 
 import (
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -22,10 +23,15 @@ const (
 
 	FusionModeParallel   = "parallel"
 	FusionModeSequential = "sequential"
+
+	GuardrailResponseBuffered = "buffered"
+	GuardrailResponseStream   = "buffered-stream"
 )
 
 // Settings stores local gateway settings.
 type Settings struct {
+	BindHost                        string           `json:"bind_host,omitempty"`
+	BindPort                        string           `json:"bind_port,omitempty"`
 	RequireAPIKey                   bool             `json:"require_api_key"`
 	LocalAPIKey                     string           `json:"local_api_key"`
 	DefaultProvider                 string           `json:"default_provider"`
@@ -34,6 +40,7 @@ type Settings struct {
 	ObservabilityEnabled            bool             `json:"observability_enabled"`
 	SaveRawPrompt                   bool             `json:"save_raw_prompt"`
 	SaveRawToolResult               bool             `json:"save_raw_tool_result"`
+	SaveRawResponse                 bool             `json:"save_raw_response"`
 	MaskDebugSecrets                bool             `json:"mask_debug_secrets"`
 	CompactDebugPayloads            bool             `json:"compact_debug_payloads"`
 	MaxDebugPayloadBytes            int              `json:"max_debug_payload_bytes"`
@@ -62,6 +69,7 @@ type Settings struct {
 	Combos                          []Combo          `json:"combos"`
 	PromptRouters                   []PromptRouter   `json:"prompt_routers"`
 	Fusions                         []Fusion         `json:"fusions"`
+	Guardrails                      []Guardrail      `json:"guardrails"`
 	DailyBudgetUSD                  float64          `json:"daily_budget_usd"`
 	MonthlyBudgetUSD                float64          `json:"monthly_budget_usd"`
 	BudgetAlertPct                  int              `json:"budget_alert_pct"`
@@ -76,9 +84,17 @@ type APIKeyPolicy struct {
 	MaxRequests   int      `json:"max_requests"`
 	MaxTokens     int      `json:"max_tokens"`
 	MaxCostUSD    float64  `json:"max_cost_usd"`
+	MaxRPM        int      `json:"max_rpm"`
+	MaxConcurrent int      `json:"max_concurrent"`
 	UsedRequests  int      `json:"used_requests"`
 	UsedTokens    int      `json:"used_tokens"`
 	UsedCostUSD   float64  `json:"used_cost_usd"`
+}
+
+type APIKeyUsageDelta struct {
+	Requests int
+	Tokens   int
+	CostUSD  float64
 }
 
 // ModelPriceRule overrides per-provider/model prices in USD per 1M tokens, context metadata and optional rate limits.
@@ -158,6 +174,30 @@ type Fusion struct {
 	IncludeExpertRawOutputs bool           `json:"include_expert_raw_outputs"`
 }
 
+// Guardrail describes a virtual model that optimizes eligible input text and validates the buffered output.
+type Guardrail struct {
+	Name               string   `json:"name"`
+	Description        string   `json:"description,omitempty"`
+	Enabled            bool     `json:"enabled"`
+	SchemaVersion      int      `json:"schema_version,omitempty"`
+	OptimizerEnabled   bool     `json:"optimizer_enabled"`
+	ValidatorEnabled   bool     `json:"validator_enabled"`
+	OptimizerTarget    string   `json:"optimizer_target,omitempty"`
+	MainTarget         string   `json:"main_target"`
+	ValidatorTarget    string   `json:"validator_target"`
+	ResponseMode       string   `json:"response_mode"`
+	PolicyPresets      []string `json:"policy_presets,omitempty"`
+	CustomPolicy       string   `json:"custom_policy,omitempty"`
+	OptimizerTimeoutMS int      `json:"optimizer_timeout_ms"`
+	MainTimeoutMS      int      `json:"main_timeout_ms"`
+	ValidatorTimeoutMS int      `json:"validator_timeout_ms"`
+	MaxPatchCount      int      `json:"max_patch_count"`
+	MaxPatchBytes      int      `json:"max_patch_bytes"`
+	MaxBufferedBytes   int      `json:"max_buffered_bytes"`
+	OptimizerFailOpen  bool     `json:"optimizer_fail_open"`
+	ValidatorFailOpen  bool     `json:"validator_fail_open"`
+}
+
 // ProviderKey holds one API key / credential entry for multi-key provider support.
 type ProviderKey struct {
 	ID       string `json:"id"`
@@ -165,6 +205,44 @@ type ProviderKey struct {
 	Key      string `json:"key"`
 	Enabled  bool   `json:"enabled"`
 	Priority int    `json:"priority"`
+}
+
+// ProviderAccount holds one independently routable upstream credential set under a logical provider.
+// Credentials are secret fields and must be redacted before dashboard/API responses.
+type ProviderAccount struct {
+	ID         string `json:"id"`
+	ProviderID string `json:"provider_id"`
+	Name       string `json:"name"`
+	AuthType   string `json:"auth_type"`
+
+	APIKey       string `json:"api_key,omitempty"`
+	AccessToken  string `json:"access_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+
+	ProxyURL          string  `json:"proxy_url,omitempty"`
+	ProxyID           string  `json:"proxy_id,omitempty"`
+	Enabled           bool    `json:"enabled"`
+	Priority          int     `json:"priority"`
+	QuotaLimitPercent float64 `json:"quota_limit_percent,omitempty"`
+
+	FailureStreak  int       `json:"failure_streak"`
+	CooldownUntil  time.Time `json:"cooldown_until,omitempty"`
+	CooldownReason string    `json:"cooldown_reason,omitempty"`
+	LastUsedAt     time.Time `json:"last_used_at,omitempty"`
+	LastSuccessAt  time.Time `json:"last_success_at,omitempty"`
+	LastFailureAt  time.Time `json:"last_failure_at,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// ProviderAccountOutcome is an atomic operational update recorded after an account attempt.
+type ProviderAccountOutcome struct {
+	Success          bool
+	IncrementFailure bool
+	FailureStreak    int
+	CooldownUntil    time.Time
+	CooldownReason   string
+	At               time.Time
 }
 
 // Proxy describes one reusable outbound proxy in the shared proxy pool.
@@ -175,6 +253,26 @@ type Proxy struct {
 	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Invoice tracks manually-entered provider/vendor bills for cost management.
+type Invoice struct {
+	ID         string    `json:"id"`
+	ProviderID string    `json:"provider_id"`
+	Vendor     string    `json:"vendor"`
+	InvoiceNo  string    `json:"invoice_no"`
+	Status     string    `json:"status"`
+	IssueDate  time.Time `json:"issue_date"`
+	DueDate    time.Time `json:"due_date"`
+	PaidDate   time.Time `json:"paid_date"`
+	Currency   string    `json:"currency"`
+	Amount     float64   `json:"amount"`
+	Tax        float64   `json:"tax"`
+	Total      float64   `json:"total"`
+	Note       string    `json:"note"`
+	Attachment string    `json:"attachment"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Provider describes one upstream account or compatible endpoint.
@@ -190,6 +288,7 @@ type Provider struct {
 	ProxyID      string        `json:"proxy_id,omitempty"`
 	Enabled      bool          `json:"enabled"`
 	Models       []string      `json:"models"`
+	HiddenModels []string      `json:"hidden_models,omitempty"`
 	Keys         []ProviderKey `json:"keys,omitempty"`
 	KeyStrategy  string        `json:"key_strategy"`
 	StickyLimit  int           `json:"sticky_limit"`
@@ -199,21 +298,48 @@ type Provider struct {
 
 // RequestLogDebugPayload stores optional, explicitly enabled diagnostic payloads.
 type RequestLogDebugPayload struct {
-	RawPrompt                  string `json:"raw_prompt,omitempty"`
-	RawToolResult              string `json:"raw_tool_result,omitempty"`
-	CompactPrompt              string `json:"compact_prompt,omitempty"`
-	CompactToolResult          string `json:"compact_tool_result,omitempty"`
-	RawPromptBytes             int    `json:"raw_prompt_bytes,omitempty"`
-	RawToolResultBytes         int    `json:"raw_tool_result_bytes,omitempty"`
-	CompactPromptBytes         int    `json:"compact_prompt_bytes,omitempty"`
-	CompactToolResultBytes     int    `json:"compact_tool_result_bytes,omitempty"`
-	EstimatedPromptTokensSaved int    `json:"estimated_prompt_tokens_saved,omitempty"`
-	EstimatedToolTokensSaved   int    `json:"estimated_tool_tokens_saved,omitempty"`
-	RawPromptTruncated         bool   `json:"raw_prompt_truncated,omitempty"`
-	RawToolTruncated           bool   `json:"raw_tool_truncated,omitempty"`
-	CompactPromptApplied       bool   `json:"compact_prompt_applied,omitempty"`
-	CompactToolApplied         bool   `json:"compact_tool_applied,omitempty"`
-	Redacted                   bool   `json:"redacted,omitempty"`
+	RawPrompt                    string `json:"raw_prompt,omitempty"`
+	RawToolResult                string `json:"raw_tool_result,omitempty"`
+	RawResponse                  string `json:"raw_response,omitempty"`
+	CompactPrompt                string `json:"compact_prompt,omitempty"`
+	CompactToolResult            string `json:"compact_tool_result,omitempty"`
+	CompactResponse              string `json:"compact_response,omitempty"`
+	RawPromptBytes               int    `json:"raw_prompt_bytes,omitempty"`
+	RawToolResultBytes           int    `json:"raw_tool_result_bytes,omitempty"`
+	RawResponseBytes             int    `json:"raw_response_bytes,omitempty"`
+	CompactPromptBytes           int    `json:"compact_prompt_bytes,omitempty"`
+	CompactToolResultBytes       int    `json:"compact_tool_result_bytes,omitempty"`
+	CompactResponseBytes         int    `json:"compact_response_bytes,omitempty"`
+	EstimatedPromptTokensSaved   int    `json:"estimated_prompt_tokens_saved,omitempty"`
+	EstimatedToolTokensSaved     int    `json:"estimated_tool_tokens_saved,omitempty"`
+	EstimatedResponseTokensSaved int    `json:"estimated_response_tokens_saved,omitempty"`
+	RawPromptTruncated           bool   `json:"raw_prompt_truncated,omitempty"`
+	RawToolTruncated             bool   `json:"raw_tool_truncated,omitempty"`
+	RawResponseTruncated         bool   `json:"raw_response_truncated,omitempty"`
+	CompactPromptApplied         bool   `json:"compact_prompt_applied,omitempty"`
+	CompactToolApplied           bool   `json:"compact_tool_applied,omitempty"`
+	CompactResponseApplied       bool   `json:"compact_response_applied,omitempty"`
+	Redacted                     bool   `json:"redacted,omitempty"`
+}
+
+type MediaMetrics struct {
+	Source          string  `json:"source,omitempty"`
+	Operation       string  `json:"operation,omitempty"`
+	RequestBytes    int64   `json:"request_bytes,omitempty"`
+	ResponseBytes   int64   `json:"response_bytes,omitempty"`
+	InputFileCount  int     `json:"input_file_count,omitempty"`
+	ImageCount      int     `json:"image_count,omitempty"`
+	ImageWidth      int     `json:"image_width,omitempty"`
+	ImageHeight     int     `json:"image_height,omitempty"`
+	ImageSize       string  `json:"image_size,omitempty"`
+	ImageQuality    string  `json:"image_quality,omitempty"`
+	TTSCharacters   int     `json:"tts_characters,omitempty"`
+	AudioDurationMS int64   `json:"audio_duration_ms,omitempty"`
+	STTDurationMS   int64   `json:"stt_duration_ms,omitempty"`
+	CostBasis       string  `json:"cost_basis,omitempty"`
+	CostUnits       float64 `json:"cost_units,omitempty"`
+	UnitPriceUSD    float64 `json:"unit_price_usd,omitempty"`
+	Estimated       bool    `json:"estimated,omitempty"`
 }
 
 // RequestLog is a compact operational log for dashboard inspection.
@@ -222,7 +348,9 @@ type RequestLog struct {
 	Timestamp                  time.Time               `json:"timestamp"`
 	Endpoint                   string                  `json:"endpoint"`
 	ProviderID                 string                  `json:"provider_id"`
+	ProviderAccountID          string                  `json:"provider_account_id,omitempty"`
 	Model                      string                  `json:"model"`
+	Media                      MediaMetrics            `json:"media,omitempty"`
 	Status                     string                  `json:"status"`
 	DurationMS                 int64                   `json:"duration_ms"`
 	Stream                     bool                    `json:"stream"`
@@ -268,17 +396,32 @@ type RequestLog struct {
 	FusionUsedReviewer         bool                    `json:"fusion_used_reviewer,omitempty"`
 	FusionError                string                  `json:"fusion_error,omitempty"`
 	FusionTrace                string                  `json:"fusion_trace,omitempty"`
+	GuardrailName              string                  `json:"guardrail_name,omitempty"`
+	GuardrailDecision          string                  `json:"guardrail_decision,omitempty"`
+	GuardrailFinalAction       string                  `json:"guardrail_final_action,omitempty"`
+	GuardrailDurationMS        int64                   `json:"guardrail_duration_ms,omitempty"`
+	GuardrailTrace             string                  `json:"guardrail_trace,omitempty"`
 	Debug                      *RequestLogDebugPayload `json:"debug,omitempty"`
+}
+
+type RequestLogBatchWriter interface {
+	AddRequestLogs([]RequestLog) error
 }
 
 // Store is the persistence contract used by gateway and dashboard.
 type Store interface {
 	GetSettings() (Settings, error)
 	SaveSettings(Settings) error
+	RecordAPIKeyUsage(id string, delta APIKeyUsageDelta) error
 	ListProviders() ([]Provider, error)
 	GetProvider(id string) (Provider, bool, error)
 	UpsertProvider(Provider) error
 	DeleteProvider(id string) error
+	ListProviderAccounts(providerID string) ([]ProviderAccount, error)
+	GetProviderAccount(id string) (ProviderAccount, bool, error)
+	UpsertProviderAccount(ProviderAccount) error
+	DeleteProviderAccount(id string) error
+	RecordProviderAccountOutcome(id string, outcome ProviderAccountOutcome) error
 	AddRequestLog(RequestLog) error
 	RecentRequestLogs(limit int) ([]RequestLog, error)
 	GetRequestDebugPayload(id string) (*RequestLogDebugPayload, bool, error)
@@ -289,6 +432,11 @@ type Store interface {
 	GetProxy(id string) (Proxy, bool, error)
 	UpsertProxy(Proxy) error
 	DeleteProxy(id string) error
+
+	ListInvoices() ([]Invoice, error)
+	GetInvoice(id string) (Invoice, bool, error)
+	UpsertInvoice(Invoice) error
+	DeleteInvoice(id string) error
 }
 
 func HydrateRequestLogMetrics(log RequestLog) RequestLog {
@@ -306,8 +454,10 @@ func StripRequestDebugPayload(log RequestLog) RequestLog {
 	debug := *log.Debug
 	debug.RawPrompt = ""
 	debug.RawToolResult = ""
+	debug.RawResponse = ""
 	debug.CompactPrompt = ""
 	debug.CompactToolResult = ""
+	debug.CompactResponse = ""
 	log.Debug = &debug
 	return HydrateRequestLogMetrics(log)
 }
@@ -320,12 +470,42 @@ func CloneRequestDebugPayload(payload *RequestLogDebugPayload) *RequestLogDebugP
 	return &out
 }
 
+func PreserveAPIKeyUsage(items []APIKeyPolicy, current []APIKeyPolicy) []APIKeyPolicy {
+	usage := make(map[string]APIKeyPolicy, len(current))
+	for _, item := range current {
+		usage[item.ID] = item
+	}
+	for i := range items {
+		if previous, ok := usage[items[i].ID]; ok {
+			items[i].UsedRequests = previous.UsedRequests
+			items[i].UsedTokens = previous.UsedTokens
+			items[i].UsedCostUSD = previous.UsedCostUSD
+		}
+	}
+	return items
+}
+
 func NormalizeAPIKeyPolicies(items []APIKeyPolicy) []APIKeyPolicy {
 	out := []APIKeyPolicy{}
 	for _, item := range items {
 		item.ID = strings.TrimSpace(item.ID)
 		item.Key = strings.TrimSpace(item.Key)
 		item.AllowedModels = NormalizeModels(item.AllowedModels)
+		if item.MaxRequests < 0 {
+			item.MaxRequests = 0
+		}
+		if item.MaxTokens < 0 {
+			item.MaxTokens = 0
+		}
+		if item.MaxCostUSD < 0 {
+			item.MaxCostUSD = 0
+		}
+		if item.MaxRPM < 0 {
+			item.MaxRPM = 0
+		}
+		if item.MaxConcurrent < 0 {
+			item.MaxConcurrent = 0
+		}
 		if item.ID == "" && item.Key != "" {
 			item.ID = item.Key
 		}
@@ -431,6 +611,91 @@ func normalizePromptRouterLevel(value string) string {
 	default:
 		return ""
 	}
+}
+
+func NormalizeGuardrails(items []Guardrail) []Guardrail {
+	seen := map[string]bool{}
+	out := []Guardrail{}
+	for _, item := range items {
+		item.Name = strings.TrimSpace(item.Name)
+		item.Description = strings.TrimSpace(item.Description)
+		item.OptimizerTarget = strings.TrimSpace(item.OptimizerTarget)
+		item.MainTarget = strings.TrimSpace(item.MainTarget)
+		item.ValidatorTarget = strings.TrimSpace(item.ValidatorTarget)
+		item.CustomPolicy = strings.TrimSpace(item.CustomPolicy)
+		if item.SchemaVersion <= 0 {
+			// Guardrails created before independent stage toggles always ran validation.
+			item.ValidatorEnabled = true
+		}
+		item.SchemaVersion = 1
+		if item.Name == "" || item.MainTarget == "" || (item.ValidatorEnabled && item.ValidatorTarget == "") || seen[item.Name] {
+			continue
+		}
+		if item.Name == item.MainTarget || (item.ValidatorEnabled && item.Name == item.ValidatorTarget) || (item.OptimizerEnabled && item.Name == item.OptimizerTarget) {
+			continue
+		}
+		if item.ResponseMode != GuardrailResponseBuffered {
+			item.ResponseMode = GuardrailResponseStream
+		}
+		item.PolicyPresets = normalizeGuardrailPolicies(item.PolicyPresets)
+		if item.OptimizerEnabled && item.OptimizerTarget == "" {
+			item.OptimizerEnabled = false
+		}
+		item.OptimizerTimeoutMS = normalizeGuardrailTimeout(item.OptimizerTimeoutMS, 30000)
+		item.MainTimeoutMS = normalizeGuardrailTimeout(item.MainTimeoutMS, 120000)
+		item.ValidatorTimeoutMS = normalizeGuardrailTimeout(item.ValidatorTimeoutMS, 30000)
+		if item.MaxPatchCount <= 0 {
+			item.MaxPatchCount = 128
+		} else if item.MaxPatchCount > 1024 {
+			item.MaxPatchCount = 1024
+		}
+		if item.MaxPatchBytes <= 0 {
+			item.MaxPatchBytes = 256 * 1024
+		} else if item.MaxPatchBytes > 1024*1024 {
+			item.MaxPatchBytes = 1024 * 1024
+		}
+		if item.MaxBufferedBytes <= 0 {
+			item.MaxBufferedBytes = 4 * 1024 * 1024
+		} else if item.MaxBufferedBytes > 16*1024*1024 {
+			item.MaxBufferedBytes = 16 * 1024 * 1024
+		}
+		// Guardrails are fail-open by default for backward-compatible zero-value settings.
+		if !item.OptimizerFailOpen && !item.ValidatorFailOpen {
+			item.OptimizerFailOpen = true
+			item.ValidatorFailOpen = true
+		}
+		seen[item.Name] = true
+		out = append(out, item)
+	}
+	return out
+}
+
+func normalizeGuardrailTimeout(value, fallback int) int {
+	if value <= 0 {
+		return fallback
+	}
+	if value > 180000 {
+		return 180000
+	}
+	return value
+}
+
+func normalizeGuardrailPolicies(items []string) []string {
+	allowed := map[string]bool{"safety": true, "quality": true, "format": true, "privacy": true}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, item := range items {
+		item = strings.ToLower(strings.TrimSpace(item))
+		if !allowed[item] || seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	if len(out) == 0 {
+		out = []string{"safety", "quality", "format", "privacy"}
+	}
+	return out
 }
 
 // NormalizeBudgetSettings clamps budget alert threshold and budget amounts to
@@ -587,6 +852,9 @@ func DefaultSettings() Settings {
 		APIKeys:                         []APIKeyPolicy{},
 		ModelPrices:                     []ModelPriceRule{},
 		Combos:                          []Combo{},
+		PromptRouters:                   []PromptRouter{},
+		Fusions:                         []Fusion{},
+		Guardrails:                      []Guardrail{},
 		BudgetAlertPct:                  80,
 	}
 }
@@ -689,6 +957,7 @@ func NormalizeProvider(provider Provider) Provider {
 		provider.ProxyURL = ""
 	}
 	provider.Models = NormalizeModels(provider.Models)
+	provider.HiddenModels = NormalizeModels(provider.HiddenModels)
 	provider.Keys = NormalizeProviderKeys(provider.Keys)
 	if len(provider.Keys) == 0 && provider.APIKey != "" {
 		provider.Keys = []ProviderKey{{ID: "default", Name: "Default Key", Key: provider.APIKey, Enabled: true, Priority: 1}}
@@ -751,6 +1020,53 @@ func NormalizeProviderKeys(items []ProviderKey) []ProviderKey {
 	return out
 }
 
+func NormalizeProviderAccount(item ProviderAccount) ProviderAccount {
+	item.ID = strings.TrimSpace(item.ID)
+	item.ProviderID = strings.TrimSpace(item.ProviderID)
+	item.Name = strings.TrimSpace(item.Name)
+	item.AuthType = strings.ToLower(strings.TrimSpace(item.AuthType))
+	switch item.AuthType {
+	case "api_key", "bearer", "oauth", "none":
+	default:
+		item.AuthType = "api_key"
+	}
+	item.APIKey = strings.TrimSpace(item.APIKey)
+	item.AccessToken = strings.TrimSpace(item.AccessToken)
+	item.RefreshToken = strings.TrimSpace(item.RefreshToken)
+	item.ProxyID = strings.TrimSpace(item.ProxyID)
+	item.ProxyURL = strings.TrimSpace(item.ProxyURL)
+	if item.ProxyID != "" {
+		item.ProxyURL = ""
+	}
+	if item.Priority <= 0 {
+		item.Priority = 1
+	}
+	if math.IsNaN(item.QuotaLimitPercent) || math.IsInf(item.QuotaLimitPercent, 0) || item.QuotaLimitPercent < 0 {
+		item.QuotaLimitPercent = 0
+	}
+	if item.QuotaLimitPercent > 100 {
+		item.QuotaLimitPercent = 100
+	}
+	if item.FailureStreak < 0 {
+		item.FailureStreak = 0
+	}
+	return item
+}
+
+func NormalizeProviderAccounts(items []ProviderAccount) []ProviderAccount {
+	out := make([]ProviderAccount, 0, len(items))
+	seen := map[string]bool{}
+	for _, item := range items {
+		item = NormalizeProviderAccount(item)
+		if item.ID == "" || item.ProviderID == "" || seen[item.ID] {
+			continue
+		}
+		seen[item.ID] = true
+		out = append(out, item)
+	}
+	return out
+}
+
 func NormalizeProxy(p Proxy) Proxy {
 	p.ID = strings.TrimSpace(p.ID)
 	p.Name = strings.TrimSpace(p.Name)
@@ -763,6 +1079,52 @@ func NormalizeProxies(items []Proxy) []Proxy {
 	seen := map[string]bool{}
 	for _, item := range items {
 		item = NormalizeProxy(item)
+		if item.ID == "" || seen[item.ID] {
+			continue
+		}
+		seen[item.ID] = true
+		out = append(out, item)
+	}
+	return out
+}
+
+func NormalizeInvoice(item Invoice) Invoice {
+	item.ID = strings.TrimSpace(item.ID)
+	item.ProviderID = strings.TrimSpace(item.ProviderID)
+	item.Vendor = strings.TrimSpace(item.Vendor)
+	item.InvoiceNo = strings.TrimSpace(item.InvoiceNo)
+	item.Status = strings.ToLower(strings.TrimSpace(item.Status))
+	switch item.Status {
+	case "draft", "unpaid", "paid", "overdue", "void":
+	default:
+		item.Status = "unpaid"
+	}
+	item.Currency = strings.ToUpper(strings.TrimSpace(item.Currency))
+	if item.Currency == "" {
+		item.Currency = "USD"
+	}
+	if item.Amount < 0 {
+		item.Amount = 0
+	}
+	if item.Tax < 0 {
+		item.Tax = 0
+	}
+	if item.Total < 0 {
+		item.Total = 0
+	}
+	if item.Total == 0 {
+		item.Total = item.Amount + item.Tax
+	}
+	item.Note = strings.TrimSpace(item.Note)
+	item.Attachment = strings.TrimSpace(item.Attachment)
+	return item
+}
+
+func NormalizeInvoices(items []Invoice) []Invoice {
+	out := make([]Invoice, 0, len(items))
+	seen := map[string]bool{}
+	for _, item := range items {
+		item = NormalizeInvoice(item)
 		if item.ID == "" || seen[item.ID] {
 			continue
 		}

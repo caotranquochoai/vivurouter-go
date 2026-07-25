@@ -14,10 +14,12 @@ import (
 )
 
 type databaseFile struct {
-	Settings    Settings     `json:"settings"`
-	Providers   []Provider   `json:"providers"`
-	Proxies     []Proxy      `json:"proxies,omitempty"`
-	RequestLogs []RequestLog `json:"request_logs,omitempty"`
+	Settings         Settings          `json:"settings"`
+	Providers        []Provider        `json:"providers"`
+	ProviderAccounts []ProviderAccount `json:"provider_accounts,omitempty"`
+	Proxies          []Proxy           `json:"proxies,omitempty"`
+	Invoices         []Invoice         `json:"invoices,omitempty"`
+	RequestLogs      []RequestLog      `json:"request_logs,omitempty"`
 }
 
 type requestLogsFile struct {
@@ -78,6 +80,7 @@ func (s *FileStore) load() error {
 	s.db.Settings.Combos = NormalizeCombos(s.db.Settings.Combos)
 	s.db.Settings.PromptRouters = NormalizePromptRouters(s.db.Settings.PromptRouters)
 	s.db.Settings.Fusions = NormalizeFusions(s.db.Settings.Fusions)
+	s.db.Settings.Guardrails = NormalizeGuardrails(s.db.Settings.Guardrails)
 	NormalizeBudgetSettings(&s.db.Settings)
 	NormalizeDebugSettings(&s.db.Settings)
 	NormalizeTokenOptimizationSettings(&s.db.Settings)
@@ -87,6 +90,8 @@ func (s *FileStore) load() error {
 		s.db.Providers = NormalizeProviders(s.db.Providers)
 	}
 	s.db.Proxies = NormalizeProxies(s.db.Proxies)
+	s.db.ProviderAccounts = NormalizeProviderAccounts(s.db.ProviderAccounts)
+	s.db.Invoices = NormalizeInvoices(s.db.Invoices)
 	if err := s.migrateDebugPayloadsLocked(); err != nil {
 		return err
 	}
@@ -108,16 +113,42 @@ func (s *FileStore) SaveSettings(settings Settings) error {
 	if settings.KeepRequestLogs <= 0 {
 		settings.KeepRequestLogs = 200
 	}
-	settings.APIKeys = NormalizeAPIKeyPolicies(settings.APIKeys)
+	settings.APIKeys = PreserveAPIKeyUsage(NormalizeAPIKeyPolicies(settings.APIKeys), s.db.Settings.APIKeys)
 	settings.ModelPrices = NormalizeModelPriceRules(settings.ModelPrices)
 	settings.Combos = NormalizeCombos(settings.Combos)
 	settings.PromptRouters = NormalizePromptRouters(settings.PromptRouters)
 	settings.Fusions = NormalizeFusions(settings.Fusions)
+	settings.Guardrails = NormalizeGuardrails(settings.Guardrails)
 	NormalizeBudgetSettings(&settings)
 	NormalizeDebugSettings(&settings)
 	NormalizeTokenOptimizationSettings(&settings)
 	s.db.Settings = settings
 	return s.saveLocked()
+}
+
+func (s *FileStore) RecordAPIKeyUsage(id string, delta APIKeyUsageDelta) error {
+	id = strings.TrimSpace(id)
+	if id == "" || id == "local" {
+		return nil
+	}
+	requests := max(delta.Requests, 0)
+	tokens := max(delta.Tokens, 0)
+	cost := max(delta.CostUSD, 0)
+	if requests == 0 && tokens == 0 && cost == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.Settings.APIKeys {
+		if s.db.Settings.APIKeys[i].ID != id {
+			continue
+		}
+		s.db.Settings.APIKeys[i].UsedRequests += requests
+		s.db.Settings.APIKeys[i].UsedTokens += tokens
+		s.db.Settings.APIKeys[i].UsedCostUSD += cost
+		return s.saveLocked()
+	}
+	return nil
 }
 
 func (s *FileStore) ListProviders() ([]Provider, error) {
@@ -194,10 +225,132 @@ func (s *FileStore) DeleteProvider(id string) error {
 	for i := range s.db.Providers {
 		if s.db.Providers[i].ID == id {
 			s.db.Providers = append(s.db.Providers[:i], s.db.Providers[i+1:]...)
+			kept := s.db.ProviderAccounts[:0]
+			for _, account := range s.db.ProviderAccounts {
+				if account.ProviderID != id {
+					kept = append(kept, account)
+				}
+			}
+			s.db.ProviderAccounts = kept
 			return s.saveLocked()
 		}
 	}
 	return nil
+}
+
+func (s *FileStore) ListProviderAccounts(providerID string) ([]ProviderAccount, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []ProviderAccount{}
+	for _, account := range s.db.ProviderAccounts {
+		if providerID == "" || account.ProviderID == providerID {
+			out = append(out, s.resolveAccountProxy(account))
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Priority != out[j].Priority {
+			return out[i].Priority < out[j].Priority
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+func (s *FileStore) GetProviderAccount(id string) (ProviderAccount, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, account := range s.db.ProviderAccounts {
+		if account.ID == id {
+			return s.resolveAccountProxy(account), true, nil
+		}
+	}
+	return ProviderAccount{}, false, nil
+}
+
+func (s *FileStore) UpsertProviderAccount(account ProviderAccount) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	account = NormalizeProviderAccount(account)
+	if account.ID == "" {
+		account.ID = randomID("account")
+	}
+	if account.Name == "" {
+		account.Name = account.ID
+	}
+	account.UpdatedAt = time.Now().UTC()
+	for i := range s.db.ProviderAccounts {
+		if s.db.ProviderAccounts[i].ID == account.ID {
+			account.CreatedAt = s.db.ProviderAccounts[i].CreatedAt
+			if account.CreatedAt.IsZero() {
+				account.CreatedAt = account.UpdatedAt
+			}
+			s.db.ProviderAccounts[i] = account
+			return s.saveLocked()
+		}
+	}
+	account.CreatedAt = account.UpdatedAt
+	s.db.ProviderAccounts = append(s.db.ProviderAccounts, account)
+	return s.saveLocked()
+}
+
+func (s *FileStore) DeleteProviderAccount(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.ProviderAccounts {
+		if s.db.ProviderAccounts[i].ID == id {
+			s.db.ProviderAccounts = append(s.db.ProviderAccounts[:i], s.db.ProviderAccounts[i+1:]...)
+			return s.saveLocked()
+		}
+	}
+	return nil
+}
+
+func (s *FileStore) RecordProviderAccountOutcome(id string, outcome ProviderAccountOutcome) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.ProviderAccounts {
+		if s.db.ProviderAccounts[i].ID != id {
+			continue
+		}
+		account := &s.db.ProviderAccounts[i]
+		at := outcome.At.UTC()
+		if at.IsZero() {
+			at = time.Now().UTC()
+		}
+		account.LastUsedAt = at
+		if outcome.Success {
+			account.FailureStreak = 0
+			account.CooldownUntil = time.Time{}
+			account.CooldownReason = ""
+			account.LastSuccessAt = at
+		} else {
+			if outcome.IncrementFailure {
+				account.FailureStreak++
+			} else {
+				account.FailureStreak = outcome.FailureStreak
+			}
+			account.CooldownUntil = outcome.CooldownUntil.UTC()
+			account.CooldownReason = strings.TrimSpace(outcome.CooldownReason)
+			account.LastFailureAt = at
+		}
+		account.UpdatedAt = at
+		return s.saveLocked()
+	}
+	return nil
+}
+
+func (s *FileStore) resolveAccountProxy(account ProviderAccount) ProviderAccount {
+	if account.ProxyID == "" {
+		return account
+	}
+	for _, px := range s.db.Proxies {
+		if px.ID == account.ProxyID && px.Enabled {
+			account.ProxyURL = px.URL
+			return account
+		}
+	}
+	account.ProxyURL = ""
+	return account
 }
 
 func (s *FileStore) ListProxies() ([]Proxy, error) {
@@ -253,6 +406,65 @@ func (s *FileStore) DeleteProxy(id string) error {
 	for i := range s.db.Proxies {
 		if s.db.Proxies[i].ID == id {
 			s.db.Proxies = append(s.db.Proxies[:i], s.db.Proxies[i+1:]...)
+			return s.saveLocked()
+		}
+	}
+	return nil
+}
+
+func (s *FileStore) ListInvoices() ([]Invoice, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	items := cloneInvoices(s.db.Invoices)
+	sort.SliceStable(items, func(i, j int) bool {
+		if !items[i].IssueDate.Equal(items[j].IssueDate) {
+			return items[i].IssueDate.After(items[j].IssueDate)
+		}
+		return items[i].ID < items[j].ID
+	})
+	return items, nil
+}
+
+func (s *FileStore) GetInvoice(id string) (Invoice, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, invoice := range s.db.Invoices {
+		if invoice.ID == id {
+			return invoice, true, nil
+		}
+	}
+	return Invoice{}, false, nil
+}
+
+func (s *FileStore) UpsertInvoice(invoice Invoice) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	invoice = NormalizeInvoice(invoice)
+	if invoice.ID == "" {
+		invoice.ID = randomID("inv")
+	}
+	invoice.UpdatedAt = time.Now().UTC()
+	for i := range s.db.Invoices {
+		if s.db.Invoices[i].ID == invoice.ID {
+			invoice.CreatedAt = s.db.Invoices[i].CreatedAt
+			if invoice.CreatedAt.IsZero() {
+				invoice.CreatedAt = invoice.UpdatedAt
+			}
+			s.db.Invoices[i] = invoice
+			return s.saveLocked()
+		}
+	}
+	invoice.CreatedAt = invoice.UpdatedAt
+	s.db.Invoices = append(s.db.Invoices, invoice)
+	return s.saveLocked()
+}
+
+func (s *FileStore) DeleteInvoice(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.Invoices {
+		if s.db.Invoices[i].ID == id {
+			s.db.Invoices = append(s.db.Invoices[:i], s.db.Invoices[i+1:]...)
 			return s.saveLocked()
 		}
 	}
@@ -329,7 +541,7 @@ func (s *FileStore) migrateDebugPayloadsLocked() error {
 			changed = true
 		}
 		debug := s.db.RequestLogs[i].Debug
-		if debug == nil || (debug.RawPrompt == "" && debug.RawToolResult == "") {
+		if debug == nil || (debug.RawPrompt == "" && debug.RawToolResult == "" && debug.RawResponse == "") {
 			continue
 		}
 		if err := s.saveDebugPayloadLocked(s.db.RequestLogs[i].ID, debug); err != nil {
@@ -387,6 +599,8 @@ func (s *FileStore) ResetAllData() error {
 	s.db = databaseFile{
 		Settings:    DefaultSettings(),
 		Providers:   SeedProviders(),
+		Proxies:     []Proxy{},
+		Invoices:    []Invoice{},
 		RequestLogs: []RequestLog{},
 	}
 	if err := s.saveLocked(); err != nil {
@@ -396,7 +610,7 @@ func (s *FileStore) ResetAllData() error {
 }
 
 func (s *FileStore) saveDebugPayloadLocked(id string, payload *RequestLogDebugPayload) error {
-	if id == "" || payload == nil || (payload.RawPrompt == "" && payload.RawToolResult == "") {
+	if id == "" || payload == nil || (payload.RawPrompt == "" && payload.RawToolResult == "" && payload.RawResponse == "") {
 		return nil
 	}
 	if err := os.MkdirAll(s.debugDir, 0o700); err != nil {
@@ -425,9 +639,11 @@ func (s *FileStore) debugPayloadPath(id string) string {
 
 func (s *FileStore) saveLocked() error {
 	main := databaseFile{
-		Settings:  s.db.Settings,
-		Providers: cloneProviders(s.db.Providers),
-		Proxies:   cloneProxies(s.db.Proxies),
+		Settings:         s.db.Settings,
+		Providers:        cloneProviders(s.db.Providers),
+		ProviderAccounts: cloneProviderAccounts(s.db.ProviderAccounts),
+		Proxies:          cloneProxies(s.db.Proxies),
+		Invoices:         cloneInvoices(s.db.Invoices),
 	}
 	raw, err := json.MarshalIndent(main, "", "  ")
 	if err != nil {
@@ -441,7 +657,11 @@ func (s *FileStore) saveLocked() error {
 }
 
 func (s *FileStore) saveRequestLogsLocked() error {
-	raw, err := json.MarshalIndent(requestLogsFile{RequestLogs: s.db.RequestLogs}, "", "  ")
+	// Request logs are rewritten on every AddRequestLog and are only read back by
+	// the machine, so use compact Marshal (not MarshalIndent) to cut CPU and file
+	// size on the hot path. Unmarshal reads indented or compact JSON transparently,
+	// so this stays backward compatible with logs written by older versions.
+	raw, err := json.Marshal(requestLogsFile{RequestLogs: s.db.RequestLogs})
 	if err != nil {
 		return err
 	}
@@ -466,6 +686,12 @@ func cloneProvider(provider Provider) Provider {
 	return provider
 }
 
+func cloneProviderAccounts(items []ProviderAccount) []ProviderAccount {
+	out := make([]ProviderAccount, len(items))
+	copy(out, items)
+	return out
+}
+
 func cloneProxies(items []Proxy) []Proxy {
 	out := make([]Proxy, len(items))
 	for i, item := range items {
@@ -476,6 +702,12 @@ func cloneProxies(items []Proxy) []Proxy {
 
 func cloneProxy(proxy Proxy) Proxy {
 	return proxy
+}
+
+func cloneInvoices(items []Invoice) []Invoice {
+	out := make([]Invoice, len(items))
+	copy(out, items)
+	return out
 }
 
 func randomID(prefix string) string {

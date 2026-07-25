@@ -3,10 +3,27 @@ package gateway
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/local/vivurouter-go/internal/store"
 )
+
+func TestEstimateInputTokensCountsUnicodeCharactersNotBytes(t *testing.T) {
+	body := map[string]any{"messages": []any{map[string]any{"role": "user", "content": strings.Repeat("ữ", 400)}}}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := estimateInputTokens(body)
+	byteEstimate := estimateOutputTokens(len(raw))
+	if got >= byteEstimate {
+		t.Fatalf("unicode estimate=%d, byte estimate=%d; want rune-aware estimate lower", got, byteEstimate)
+	}
+	if got < 100 || got > 120 {
+		t.Fatalf("unicode estimate=%d, want JSON overhead plus about 100 content tokens", got)
+	}
+}
 
 func TestExtractUsageFromOpenAIJSON(t *testing.T) {
 	raw := []byte(`{
@@ -87,6 +104,21 @@ func TestEstimateUsage(t *testing.T) {
 	}
 }
 
+func TestEnsureOutputEstimatedPreservesUpstreamInput(t *testing.T) {
+	usage := usageInfo{PromptTokens: 100, TotalTokens: 100}.ensureOutputEstimated(40)
+	if usage.PromptTokens != 100 || usage.CompletionTokens != 10 || usage.TotalTokens != 110 || !usage.Estimated {
+		t.Fatalf("usage = %+v", usage)
+	}
+}
+
+func TestAnalyzeUsageEstimatesMissingCompletionTokens(t *testing.T) {
+	raw := []byte(`{"choices":[{"message":{"content":"forty output characters exactly here now!"}}],"usage":{"prompt_tokens":100,"total_tokens":100}}`)
+	usage := AnalyzeUsage(store.Provider{ID: "p", Type: store.ProviderOpenAICompatible}, "gpt-4o-mini", map[string]any{"messages": []any{}}, raw, 0)
+	if usage.PromptTokens != 100 || usage.CompletionTokens <= 0 || usage.CostUSD <= 0 || !usage.Estimated {
+		t.Fatalf("usage = %+v", usage)
+	}
+}
+
 func TestEnsureStreamUsageOptions(t *testing.T) {
 	body := map[string]any{"stream": true, "stream_options": map[string]any{"foo": "bar"}}
 	updated := ensureStreamUsageOptions(body)
@@ -136,5 +168,31 @@ func TestCalculateUsageCost(t *testing.T) {
 	want := 0.4485
 	if math.Abs(cost-want) > 0.000001 {
 		t.Fatalf("cost = %.8f, want %.8f", cost, want)
+	}
+}
+
+func TestPricingFromSettingsGlobalModelAppliesToAnyProvider(t *testing.T) {
+	settings := store.Settings{ModelPrices: []store.ModelPriceRule{{Model: "gpt-5.5", InputPer1M: 2, OutputPer1M: 8}}}
+	provider := store.Provider{ID: "codex-2", Type: store.ProviderOpenAICompatible}
+	pricing, ok := pricingFromSettings(settings, provider, "codex-2/gpt-5.5")
+	if !ok {
+		t.Fatal("expected global model pricing match")
+	}
+	if pricing.Input != 2 || pricing.Output != 8 {
+		t.Fatalf("pricing = %+v, want input=2 output=8", pricing)
+	}
+}
+
+func TestPricingFromSettingsProviderRuleOverridesGlobalModel(t *testing.T) {
+	settings := store.Settings{ModelPrices: []store.ModelPriceRule{
+		{Model: "gpt-5.5", InputPer1M: 2, OutputPer1M: 8},
+		{ProviderID: "openai", Model: "gpt-5.5", InputPer1M: 1, OutputPer1M: 4},
+	}}
+	pricing, ok := pricingFromSettings(settings, store.Provider{ID: "openai"}, "gpt-5.5")
+	if !ok {
+		t.Fatal("expected provider-specific pricing match")
+	}
+	if pricing.Input != 1 || pricing.Output != 4 {
+		t.Fatalf("pricing = %+v, want provider-specific input=1 output=4", pricing)
 	}
 }

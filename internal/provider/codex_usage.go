@@ -1,29 +1,69 @@
 package provider
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/local/vivurouter-go/internal/store"
 )
 
-const defaultCodexUsageURL = "https://chatgpt.com/backend-api/wham/usage"
+const (
+	defaultCodexUsageURL               = "https://chatgpt.com/backend-api/wham/usage"
+	defaultCodexResetCreditsURL        = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"
+	defaultCodexResetCreditsConsumeURL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume"
+)
+
+// CodexResetCreditSummary reports how many reset credits can be consumed.
+type CodexResetCreditSummary struct {
+	AvailableCount int `json:"available_count"`
+}
+
+// CodexResetCredit describes one normalized Codex quota reset credit.
+type CodexResetCredit struct {
+	Status    string `json:"status"`
+	GrantedAt string `json:"granted_at,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+}
+
+// CodexResetCreditsReport is the normalized reset-credit view used by the dashboard.
+type CodexResetCreditsReport struct {
+	ProviderID     string             `json:"provider_id"`
+	AvailableCount int                `json:"available_count"`
+	Credits        []CodexResetCredit `json:"credits"`
+	FetchedAt      time.Time          `json:"fetched_at"`
+}
+
+// CodexResetResult classifies the result of consuming one reset credit.
+type CodexResetResult struct {
+	OK           bool   `json:"ok"`
+	NoCredit     bool   `json:"no_credit"`
+	Status       int    `json:"status"`
+	Code         string `json:"code,omitempty"`
+	WindowsReset int    `json:"windows_reset"`
+	Message      string `json:"message,omitempty"`
+}
 
 // CodexQuotaReport is the normalized quota view used by the dashboard.
 type CodexQuotaReport struct {
-	ProviderID         string       `json:"provider_id"`
-	Plan               string       `json:"plan"`
-	LimitReached       bool         `json:"limit_reached"`
-	ReviewLimitReached bool         `json:"review_limit_reached"`
-	Quotas             []CodexQuota `json:"quotas"`
-	Message            string       `json:"message,omitempty"`
-	FetchedAt          time.Time    `json:"fetched_at"`
+	ProviderID         string                  `json:"provider_id"`
+	Plan               string                  `json:"plan"`
+	LimitReached       bool                    `json:"limit_reached"`
+	ReviewLimitReached bool                    `json:"review_limit_reached"`
+	ResetCredits       CodexResetCreditSummary `json:"reset_credits"`
+	Quotas             []CodexQuota            `json:"quotas"`
+	Message            string                  `json:"message,omitempty"`
+	FetchedAt          time.Time               `json:"fetched_at"`
 }
 
 // CodexQuota describes one normalized quota bucket, expressed as percentages.
@@ -96,6 +136,9 @@ func ParseCodexQuotaPayload(data map[string]any) CodexQuotaReport {
 		Plan:               firstString(data, "plan_type", "plan"),
 		LimitReached:       limitReached(normalRateLimit),
 		ReviewLimitReached: limitReached(reviewRateLimit),
+		ResetCredits: CodexResetCreditSummary{
+			AvailableCount: nonNegativeInt(objectNumber(objectValue(data["rate_limit_reset_credits"]), "available_count", "availableCount")),
+		},
 	}
 	if report.Plan == "" {
 		if summary := objectValue(data["summary"]); summary != nil {
@@ -109,6 +152,252 @@ func ParseCodexQuotaPayload(data map[string]any) CodexQuotaReport {
 	report.Quotas = append(report.Quotas, quotaWindows("", normalRateLimit)...)
 	report.Quotas = append(report.Quotas, quotaWindows("review", reviewRateLimit)...)
 	return report
+}
+
+// FetchResetCredits reads reset-credit expiry details for one Codex credential.
+func (e *CodexExecutor) FetchResetCredits(ctx context.Context, provider store.Provider) (CodexResetCreditsReport, error) {
+	token := providerBearerToken(provider)
+	if token == "" {
+		return CodexResetCreditsReport{}, fmt.Errorf("provider %s has no Codex access token", provider.ID)
+	}
+	endpoint := strings.TrimSpace(os.Getenv("CODEX_RESET_CREDITS_URL"))
+	if endpoint == "" {
+		endpoint = defaultCodexResetCreditsURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return CodexResetCreditsReport{}, err
+	}
+	setCodexResetHeaders(req, token, codexAccountID(token))
+	client, err := clientForProvider(e.Client, provider)
+	if err != nil {
+		return CodexResetCreditsReport{}, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return CodexResetCreditsReport{}, err
+	}
+	defer resp.Body.Close()
+	payload, err := decodeCodexResponse(resp)
+	if err != nil {
+		return CodexResetCreditsReport{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return CodexResetCreditsReport{}, &CodexUpstreamError{Status: resp.StatusCode, Message: codexErrorMessage(payload, fmt.Sprintf("Codex reset credits API unavailable (%d)", resp.StatusCode))}
+	}
+	report := ParseCodexResetCreditsPayload(payload)
+	report.ProviderID = provider.ID
+	report.FetchedAt = time.Now().UTC()
+	return report, nil
+}
+
+// ConsumeResetCredit spends one reset credit. redeemRequestID must be generated by the server.
+func (e *CodexExecutor) ConsumeResetCredit(ctx context.Context, provider store.Provider, redeemRequestID string) (CodexResetResult, error) {
+	token := providerBearerToken(provider)
+	if token == "" {
+		return CodexResetResult{}, fmt.Errorf("provider %s has no Codex access token", provider.ID)
+	}
+	redeemRequestID = strings.TrimSpace(redeemRequestID)
+	if redeemRequestID == "" {
+		return CodexResetResult{}, fmt.Errorf("a redeem request id is required")
+	}
+	endpoint := strings.TrimSpace(os.Getenv("CODEX_RESET_CREDITS_CONSUME_URL"))
+	if endpoint == "" {
+		endpoint = defaultCodexResetCreditsConsumeURL
+	}
+	body, err := json.Marshal(map[string]string{"redeem_request_id": redeemRequestID})
+	if err != nil {
+		return CodexResetResult{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return CodexResetResult{}, err
+	}
+	setCodexResetHeaders(req, token, codexAccountID(token))
+	req.Header.Set("Content-Type", "application/json")
+	client, err := clientForProvider(e.Client, provider)
+	if err != nil {
+		return CodexResetResult{}, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return CodexResetResult{}, err
+	}
+	defer resp.Body.Close()
+	payload, err := decodeCodexResponse(resp)
+	if err != nil {
+		return CodexResetResult{}, err
+	}
+	code := firstString(payload, "code")
+	windowsReset := nonNegativeInt(objectNumber(payload, "windows_reset", "windowsReset"))
+	result := CodexResetResult{
+		OK:           resp.StatusCode >= 200 && resp.StatusCode < 300 && (code == "reset" || windowsReset > 0),
+		NoCredit:     resp.StatusCode >= 200 && resp.StatusCode < 300 && code == "no_credit",
+		Status:       resp.StatusCode,
+		Code:         code,
+		WindowsReset: windowsReset,
+		Message:      codexErrorMessage(payload, ""),
+	}
+	return result, nil
+}
+
+// CodexUpstreamError preserves HTTP status for the dashboard's one-time auth retry.
+type CodexUpstreamError struct {
+	Status  int
+	Message string
+}
+
+func (e *CodexUpstreamError) Error() string { return e.Message }
+
+func ParseCodexResetCreditsPayload(data map[string]any) CodexResetCreditsReport {
+	report := CodexResetCreditsReport{
+		AvailableCount: nonNegativeInt(objectNumber(data, "available_count", "availableCount")),
+		Credits:        []CodexResetCredit{},
+	}
+	if credits, ok := data["credits"].([]any); ok {
+		for _, raw := range credits {
+			credit := objectValue(raw)
+			if credit == nil {
+				continue
+			}
+			report.Credits = append(report.Credits, CodexResetCredit{
+				Status:    fallbackString(firstString(credit, "status"), "unknown"),
+				GrantedAt: parseCodexCreditTime(firstNonNil(credit["granted_at"], credit["grantedAt"])),
+				ExpiresAt: parseCodexCreditTime(firstNonNil(credit["expires_at"], credit["expiresAt"])),
+			})
+		}
+	}
+	sort.SliceStable(report.Credits, func(i, j int) bool {
+		left, right := report.Credits[i].ExpiresAt, report.Credits[j].ExpiresAt
+		if left == "" {
+			return false
+		}
+		if right == "" {
+			return true
+		}
+		return left < right
+	})
+	return report
+}
+
+func parseCodexCreditTime(value any) string {
+	if value == nil {
+		return ""
+	}
+	if text, ok := value.(string); ok {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return ""
+		}
+		if timestamp, err := time.Parse(time.RFC3339Nano, text); err == nil {
+			return timestamp.UTC().Format(time.RFC3339)
+		}
+		if number, err := strconv.ParseFloat(text, 64); err == nil {
+			return parseCodexCreditTime(number)
+		}
+		return ""
+	}
+	if number, ok := finiteValue(value); ok {
+		if number <= 0 {
+			return ""
+		}
+		if number < 1e12 {
+			number *= 1000
+		}
+		return time.UnixMilli(int64(number)).UTC().Format(time.RFC3339)
+	}
+	return ""
+}
+
+func setCodexResetHeaders(req *http.Request, token, accountID string) {
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("OpenAI-Beta", "codex-1")
+	req.Header.Set("originator", "codex_cli_rs")
+	if accountID != "" {
+		req.Header.Set("ChatGPT-Account-ID", accountID)
+	}
+}
+
+func codexAccountID(token string) string {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims map[string]any
+	if json.Unmarshal(raw, &claims) != nil {
+		return ""
+	}
+	for _, key := range []string{"chatgpt_account_id", "account_id", "workspace_id"} {
+		if value := strings.TrimSpace(asString(claims[key])); value != "" {
+			return value
+		}
+	}
+	if auth := objectValue(claims["https://api.openai.com/auth"]); auth != nil {
+		return firstString(auth, "chatgpt_account_id", "account_id", "workspace_id")
+	}
+	return ""
+}
+
+func decodeCodexResponse(resp *http.Response) (map[string]any, error) {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return map[string]any{}, nil
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("decode Codex response: %w", err)
+	}
+	return payload, nil
+}
+
+func codexErrorMessage(payload map[string]any, fallback string) string {
+	for _, key := range []string{"message", "error", "detail"} {
+		if value := payload[key]; value != nil {
+			if text := strings.TrimSpace(asString(value)); text != "" {
+				return text
+			}
+			if nested := objectValue(value); nested != nil {
+				if text := firstString(nested, "message", "detail", "code"); text != "" {
+					return text
+				}
+			}
+		}
+	}
+	return fallback
+}
+
+func objectNumber(data map[string]any, keys ...string) float64 {
+	if data == nil {
+		return 0
+	}
+	values := make([]any, 0, len(keys))
+	for _, key := range keys {
+		values = append(values, data[key])
+	}
+	value, _ := finiteValue(values...)
+	return value
+}
+
+func nonNegativeInt(value float64) int {
+	if value <= 0 {
+		return 0
+	}
+	return int(value)
+}
+
+func fallbackString(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }
 
 func quotaWindows(prefix string, snapshot map[string]any) []CodexQuota {

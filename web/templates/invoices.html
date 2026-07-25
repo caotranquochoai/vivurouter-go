@@ -1,0 +1,76 @@
+{{template "layout_start" .}}
+<section class="providers-hero dashboard-hero-modern">
+  <div>
+    <p class="eyebrow">Billing</p>
+    <h1>{{if eq .Lang "vi"}}Quản lý hóa đơn{{else}}Invoice management{{end}}</h1>
+    <p>{{if eq .Lang "vi"}}Ghi nhận hóa đơn/chi phí đầu vào từ provider, proxy, account hoặc vendor vận hành.{{else}}Track incoming provider, proxy, account, and operations vendor invoices.{{end}}</p>
+  </div>
+  <div class="dashboard-status-pill"><span>{{if eq .Lang "vi"}}Tổng hóa đơn{{else}}Invoices{{end}}</span><strong>{{len .Invoices}}</strong></div>
+</section>
+
+<form method="post" action="/api/invoices" class="settings-modern-grid invoices-page">
+  <section class="panel settings-card settings-card-wide">
+    <div class="section-title-row">
+      <div><p class="eyebrow">Create / edit</p><h2>{{if eq .Lang "vi"}}Nhập hóa đơn{{else}}Enter invoice{{end}}</h2><p>{{if eq .Lang "vi"}}Để trống ID để tạo mới, nhập ID hiện có để cập nhật.{{else}}Leave ID blank to create a new invoice, or enter an existing ID to update it.{{end}}</p></div>
+      <a class="btn-secondary" href="/api/invoices/export">Export CSV</a>
+    </div>
+    <div class="form-grid">
+      <label>ID<input name="id" placeholder="auto"></label>
+      <label>{{if eq .Lang "vi"}}Provider{{else}}Provider{{end}}
+        <select name="provider_id">
+          <option value="">{{if eq .Lang "vi"}}Không gắn provider{{else}}No provider link{{end}}</option>
+          {{range .Providers}}<option value="{{.ID}}">{{.ID}} ({{.Type}})</option>{{end}}
+        </select>
+      </label>
+      <label>{{if eq .Lang "vi"}}Vendor / Nhà cung cấp hóa đơn{{else}}Vendor{{end}}<input name="vendor" placeholder="OpenAI, OpenRouter, proxy vendor..."></label>
+      <label>{{if eq .Lang "vi"}}Số hóa đơn{{else}}Invoice number{{end}}<input name="invoice_no"></label>
+      <label>Status
+        <select name="status">
+          <option value="unpaid">unpaid</option>
+          <option value="paid">paid</option>
+          <option value="overdue">overdue</option>
+          <option value="draft">draft</option>
+          <option value="void">void</option>
+        </select>
+      </label>
+      <label>Currency<input name="currency" value="USD" maxlength="8"></label>
+      <label>{{if eq .Lang "vi"}}Ngày hóa đơn{{else}}Issue date{{end}}<input name="issue_date" type="date"></label>
+      <label>{{if eq .Lang "vi"}}Hạn thanh toán{{else}}Due date{{end}}<input name="due_date" type="date"></label>
+      <label>{{if eq .Lang "vi"}}Ngày thanh toán{{else}}Paid date{{end}}<input name="paid_date" type="date"></label>
+      <label>Amount<input name="amount" type="number" min="0" step="0.01"></label>
+      <label>Tax<input name="tax" type="number" min="0" step="0.01"></label>
+      <label>Total<input name="total" type="number" min="0" step="0.01" placeholder="auto = amount + tax"></label>
+      <label class="wide">Attachment / URL<input name="attachment" placeholder="PDF path, URL, note link..."></label>
+      <label class="wide">Note<textarea name="note" rows="3"></textarea></label>
+      <div class="form-actions wide"><button type="submit">{{tr .T "common.save"}}</button></div>
+    </div>
+  </section>
+</form>
+
+<section class="panel settings-card settings-card-wide invoice-list-panel">
+  <div class="section-title-row">
+    <div><p class="eyebrow">Ledger</p><h2>{{if eq .Lang "vi"}}Danh sách hóa đơn{{else}}Invoice list{{end}}</h2></div>
+  </div>
+  <div class="invoice-grid">
+    {{range .Invoices}}
+    <article class="pricing-rule-card invoice-card">
+      <div class="section-title-row">
+        <div><span class="badge">{{.Status}}</span><h3>{{if .Vendor}}{{.Vendor}}{{else}}{{.ProviderID}}{{end}}</h3></div>
+        <strong>{{.Currency}} {{printf "%.2f" .Total}}</strong>
+      </div>
+      <p class="muted-text">#{{.InvoiceNo}} · {{if .ProviderID}}{{.ProviderID}}{{else}}manual{{end}}</p>
+      <p class="muted-text">Issue: {{if ne (.IssueDate.Format "2006-01-02") "0001-01-01"}}{{.IssueDate.Format "2006-01-02"}}{{end}} · Due: {{if ne (.DueDate.Format "2006-01-02") "0001-01-01"}}{{.DueDate.Format "2006-01-02"}}{{end}} · Paid: {{if ne (.PaidDate.Format "2006-01-02") "0001-01-01"}}{{.PaidDate.Format "2006-01-02"}}{{end}}</p>
+      {{if .Note}}<p>{{.Note}}</p>{{end}}
+      {{if .Attachment}}<p class="muted-text">Attachment: <code>{{.Attachment}}</code></p>{{end}}
+      <form method="post" action="/api/invoices" class="inline-actions">
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <button type="submit" class="btn-danger">{{tr $.T "common.delete"}}</button>
+      </form>
+    </article>
+    {{else}}
+    <article class="api-key-empty api-key-empty-modern"><div class="api-key-empty-icon">🧾</div><h3>{{if eq .Lang "vi"}}Chưa có hóa đơn{{else}}No invoices yet{{end}}</h3><p>{{if eq .Lang "vi"}}Nhập hóa đơn đầu tiên để theo dõi chi phí vận hành.{{else}}Enter the first invoice to track operational costs.{{end}}</p></article>
+    {{end}}
+  </div>
+</section>
+{{template "layout_end" .}}

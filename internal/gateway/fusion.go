@@ -101,7 +101,9 @@ func (h *Handler) handleFusionChat(w http.ResponseWriter, r *http.Request, start
 		body = cloneMap(body)
 		body["stream"] = false
 	}
-	result, err := h.runFusion(r.Context(), fusion, body, settings, providers)
+	ctx, cancel := withGatewayDeadline(r.Context(), h.requestTimeout)
+	defer cancel()
+	result, err := h.runFusion(ctx, fusion, body, settings, providers)
 	status := http.StatusOK
 	statusText := "200"
 	errText := ""
@@ -109,7 +111,7 @@ func (h *Handler) handleFusionChat(w http.ResponseWriter, r *http.Request, start
 		status = http.StatusBadGateway
 		statusText = "FAILED"
 		errText = err.Error()
-		writeError(w, status, errText)
+		writeGatewayError(w, err)
 	} else if stream {
 		if writeErr := writeFusionStreamResponse(w, fusion.Name, result.Content, result.Usage); writeErr != nil && errText == "" {
 			errText = writeErr.Error()
@@ -147,7 +149,7 @@ func (h *Handler) handleFusionChat(w http.ResponseWriter, r *http.Request, start
 	}
 	_ = h.store.AddRequestLog(log)
 	if apiKey.ID != "" && apiKey.ID != "local" {
-		_ = h.store.SaveSettings(applyAPIKeyUsage(settings, apiKey.ID, result.Usage))
+		_ = h.store.RecordAPIKeyUsage(apiKey.ID, apiKeyUsageDelta(result.Usage))
 	}
 }
 
@@ -236,8 +238,11 @@ func (h *Handler) runFusionExpert(ctx context.Context, fusion store.Fusion, expe
 
 func (h *Handler) runFusionStage(ctx context.Context, target string, body map[string]any, settings store.Settings, providers []store.Provider) (string, usageInfo, error) {
 	candidates := resolveRoutableTarget(target, settings, providers)
+	plan := planCandidates(target, extractRequirements(ProtocolOpenAI, body), candidates, settings)
+	candidates = plan.resolvedCandidates()
+	candidates = h.expandAccountCandidates(ctx, candidates, time.Now().UTC())
 	if len(candidates) == 0 {
-		return "", usageInfo{}, fmt.Errorf("no provider for fusion target %s", target)
+		return "", usageInfo{}, fmt.Errorf("no compatible provider for fusion target %s", target)
 	}
 	cand := candidates[0]
 	requestBody := setModel(body, cand.Model)
@@ -247,7 +252,7 @@ func (h *Handler) runFusionStage(ctx context.Context, target string, body map[st
 	if cand.IsCodex {
 		responsesBody := translator.ChatToResponses(cand.Model, requestBody)
 		requestBody = responsesBody
-		result, err = h.executors.Codex.ExecuteResponses(ctx, cand.Provider, cand.Model, responsesBody)
+		result, err = h.executors.Codex.ExecuteResponsesForAccount(ctx, cand.Provider, cand.Model, responsesBody, cand.AccountID)
 	} else {
 		result, err = h.executors.ExecuteChat(ctx, cand.Provider, cand.Model, requestBody)
 	}

@@ -200,6 +200,7 @@ func classifierUserPrompt(prompt string) string {
 
 func (h *Handler) runPromptClassifier(ctx context.Context, prompt string, settings store.Settings, providers []store.Provider, router store.PromptRouter, apiKey store.APIKeyPolicy) (classifierOutput, error) {
 	candidates := resolveRoutableTarget(router.ClassifierModel, settings, providers)
+	candidates = h.expandAccountCandidates(ctx, candidates, time.Now().UTC())
 	if len(candidates) == 0 {
 		return classifierOutput{}, fmt.Errorf("no classifier provider for %s", router.ClassifierModel)
 	}
@@ -225,12 +226,12 @@ func (h *Handler) runPromptClassifier(ctx context.Context, prompt string, settin
 	if cand.IsCodex {
 		responsesBody := translator.ChatToResponses(cand.Model, body)
 		requestBody = responsesBody
-		result, err = h.executors.Codex.ExecuteResponses(ctx, cand.Provider, cand.Model, responsesBody)
+		result, err = h.executors.Codex.ExecuteResponsesForAccount(ctx, cand.Provider, cand.Model, responsesBody, cand.AccountID)
 	} else {
 		result, err = h.executors.ExecuteChat(ctx, cand.Provider, cand.Model, body)
 	}
 	if err != nil {
-		h.logRequest("/internal/prompt-router/classifier", cand, false, started, "FAILED", err.Error(), usageInfo{}.ensureEstimated(requestBody, 0).withCost(cand.Provider, cand.Model), apiKey, requestBody, upstreamOptimizationMeta{}, 0, time.Since(started).Milliseconds(), promptRouterDecision{Router: router, ClassifierModel: router.ClassifierModel, Reason: err.Error()})
+		h.logRequest(settings, "/internal/prompt-router/classifier", cand, false, started, "FAILED", err.Error(), usageInfo{}.ensureEstimated(requestBody, 0).withCost(cand.Provider, cand.Model), apiKey, requestBody, upstreamOptimizationMeta{}, 0, time.Since(started).Milliseconds(), promptRouterDecision{Router: router, ClassifierModel: router.ClassifierModel, Reason: err.Error()})
 		return classifierOutput{}, err
 	}
 	defer result.Response.Body.Close()
@@ -244,12 +245,12 @@ func (h *Handler) runPromptClassifier(ctx context.Context, prompt string, settin
 	usage = usage.withCost(cand.Provider, cand.Model)
 	status := result.Response.StatusCode
 	if readErr != nil {
-		h.logRequest("/internal/prompt-router/classifier", cand, false, started, "READ_ERROR", readErr.Error(), usage, apiKey, requestBody, upstreamOptimizationMeta{}, 0, time.Since(started).Milliseconds(), promptRouterDecision{Router: router, ClassifierModel: router.ClassifierModel, Reason: readErr.Error()})
+		h.logRequest(settings, "/internal/prompt-router/classifier", cand, false, started, "READ_ERROR", readErr.Error(), usage, apiKey, requestBody, upstreamOptimizationMeta{}, 0, time.Since(started).Milliseconds(), promptRouterDecision{Router: router, ClassifierModel: router.ClassifierModel, Reason: readErr.Error()})
 		return classifierOutput{}, readErr
 	}
 	if status < 200 || status >= 300 {
 		err := fmt.Errorf("classifier status %d", status)
-		h.logRequest("/internal/prompt-router/classifier", cand, false, started, fmt.Sprint(status), err.Error(), usage, apiKey, requestBody, upstreamOptimizationMeta{}, 0, time.Since(started).Milliseconds(), promptRouterDecision{Router: router, ClassifierModel: router.ClassifierModel, Reason: err.Error()})
+		h.logRequest(settings, "/internal/prompt-router/classifier", cand, false, started, fmt.Sprint(status), err.Error(), usage, apiKey, requestBody, upstreamOptimizationMeta{}, 0, time.Since(started).Milliseconds(), promptRouterDecision{Router: router, ClassifierModel: router.ClassifierModel, Reason: err.Error()})
 		return classifierOutput{}, err
 	}
 	out, parseErr := parseClassifierOutput(raw)
@@ -265,7 +266,7 @@ func (h *Handler) runPromptClassifier(ctx context.Context, prompt string, settin
 		errText = parseErr.Error()
 		decision.Reason = errText
 	}
-	h.logRequest("/internal/prompt-router/classifier", cand, false, started, statusText, errText, usage, apiKey, requestBody, upstreamOptimizationMeta{}, 0, time.Since(started).Milliseconds(), decision)
+	h.logRequest(settings, "/internal/prompt-router/classifier", cand, false, started, statusText, errText, usage, apiKey, requestBody, upstreamOptimizationMeta{}, 0, time.Since(started).Milliseconds(), decision)
 	if parseErr != nil {
 		return classifierOutput{}, parseErr
 	}

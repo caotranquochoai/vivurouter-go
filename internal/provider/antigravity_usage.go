@@ -5,8 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math"
 	"net/http"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +20,8 @@ import (
 const (
 	defaultAntigravityQuotaURL       = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
 	defaultAntigravityLoadProjectURL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+	antigravityIDEVersion            = "2.1.1"
+	antigravityIDEUserAgent          = "antigravity/ide/2.1.1 darwin/arm64"
 )
 
 // AntigravityQuotaReport is the normalized quota/model availability view used by the dashboard.
@@ -28,6 +34,22 @@ type AntigravityQuotaReport struct {
 	FetchedAt  time.Time    `json:"fetched_at"`
 }
 
+// AntigravityUpstreamError preserves the status needed for an OAuth retry without exposing response data.
+type AntigravityUpstreamError struct {
+	Operation  string
+	StatusCode int
+}
+
+func (e *AntigravityUpstreamError) Error() string {
+	return fmt.Sprintf("Antigravity %s failed: HTTP %d", e.Operation, e.StatusCode)
+}
+
+// IsAntigravityAuthError reports whether a quota/subscription request failed with expired authorization.
+func IsAntigravityAuthError(err error) bool {
+	upstream, ok := err.(*AntigravityUpstreamError)
+	return ok && (upstream.StatusCode == http.StatusUnauthorized || upstream.StatusCode == http.StatusForbidden)
+}
+
 // FetchQuota reads Antigravity / Cloud Code Assist model availability and quota metadata.
 func (e *AntigravityExecutor) FetchQuota(ctx context.Context, provider store.Provider) (AntigravityQuotaReport, error) {
 	token := providerBearerToken(provider)
@@ -35,16 +57,15 @@ func (e *AntigravityExecutor) FetchQuota(ctx context.Context, provider store.Pro
 		return AntigravityQuotaReport{}, fmt.Errorf("provider %s has no Antigravity access token", provider.ID)
 	}
 
-	quotaURL := strings.TrimSpace(os.Getenv("ANTIGRAVITY_QUOTA_URL"))
-	if quotaURL == "" {
-		quotaURL = defaultAntigravityQuotaURL
-	}
 	client, err := clientForProvider(e.Client, provider)
 	if err != nil {
 		return AntigravityQuotaReport{}, err
 	}
-	subscription := e.fetchAntigravitySubscriptionInfo(ctx, client, provider, token)
-	projectID := strings.TrimSpace(firstString(subscription, "cloudaicompanionProject", "project", "projectId"))
+	subscription, err := e.fetchAntigravitySubscriptionInfo(ctx, client, token)
+	if err != nil {
+		return AntigravityQuotaReport{}, err
+	}
+	projectID := antigravityProjectID(subscription)
 
 	body := map[string]any{}
 	if projectID != "" {
@@ -54,33 +75,26 @@ func (e *AntigravityExecutor) FetchQuota(ctx context.Context, provider store.Pro
 	if err != nil {
 		return AntigravityQuotaReport{}, err
 	}
+	quotaURL := strings.TrimSpace(os.Getenv("ANTIGRAVITY_QUOTA_URL"))
+	if quotaURL == "" {
+		quotaURL = defaultAntigravityQuotaURL
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, quotaURL, bytes.NewReader(raw))
 	if err != nil {
 		return AntigravityQuotaReport{}, err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", antigravityUserAgent())
-	req.Header.Set("X-Client-Name", "antigravity")
-	req.Header.Set("X-Client-Version", "1.107.0")
-	req.Header.Set(antigravityRequestSourceHeader, antigravityRequestSource)
-
+	setAntigravityQuotaHeaders(req, token, true)
 	resp, err := client.Do(req)
 	if err != nil {
 		return AntigravityQuotaReport{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return AntigravityQuotaReport{
-			ProviderID: provider.ID,
-			Message:    fmt.Sprintf("Antigravity connected. Quota API temporarily unavailable (%d).", resp.StatusCode),
-			FetchedAt:  time.Now().UTC(),
-		}, nil
+		return AntigravityQuotaReport{}, &AntigravityUpstreamError{Operation: "quota request", StatusCode: resp.StatusCode}
 	}
 
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&payload); err != nil {
 		return AntigravityQuotaReport{}, err
 	}
 	report := ParseAntigravityQuotaPayload(payload)
@@ -93,12 +107,12 @@ func (e *AntigravityExecutor) FetchQuota(ctx context.Context, provider store.Pro
 		report.Message = fmt.Sprintf("%d Antigravity models available. Quota windows were not returned by this API response.", len(report.Models))
 	}
 	if report.Message == "" && len(report.Quotas) == 0 {
-		report.Message = "Antigravity quota endpoint responded, but no quota windows were found."
+		report.Message = "Antigravity quota endpoint responded, but no valid quota windows were found."
 	}
 	return report, nil
 }
 
-func (e *AntigravityExecutor) fetchAntigravitySubscriptionInfo(ctx context.Context, client *http.Client, provider store.Provider, token string) map[string]any {
+func (e *AntigravityExecutor) fetchAntigravitySubscriptionInfo(ctx context.Context, client *http.Client, token string) (map[string]any, error) {
 	loadURL := strings.TrimSpace(os.Getenv("ANTIGRAVITY_LOAD_PROJECT_URL"))
 	if loadURL == "" {
 		loadURL = defaultAntigravityLoadProjectURL
@@ -109,30 +123,55 @@ func (e *AntigravityExecutor) fetchAntigravitySubscriptionInfo(ctx context.Conte
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, loadURL, bytes.NewReader(raw))
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", antigravityUserAgent())
-	req.Header.Set(antigravityRequestSourceHeader, antigravityRequestSource)
+	setAntigravityQuotaHeaders(req, token, false)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil
+		return nil, &AntigravityUpstreamError{Operation: "subscription request", StatusCode: resp.StatusCode}
 	}
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&payload); err != nil {
+		return nil, err
 	}
-	return payload
+	return payload, nil
+}
+
+func setAntigravityQuotaHeaders(req *http.Request, token string, quota bool) {
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", antigravityIDEUserAgent)
+	if quota {
+		req.Header.Set("X-Client-Name", "antigravity")
+		req.Header.Set("X-Client-Version", antigravityIDEVersion)
+	}
+}
+
+func antigravityProjectID(subscription map[string]any) string {
+	if subscription == nil {
+		return ""
+	}
+	for _, key := range []string{"cloudaicompanionProject", "project", "projectId"} {
+		value := subscription[key]
+		if text, ok := value.(string); ok && strings.TrimSpace(text) != "" {
+			return strings.TrimSpace(text)
+		}
+		if object := objectValue(value); object != nil {
+			if id := firstString(object, "id", "projectId", "name"); id != "" {
+				return id
+			}
+		}
+	}
+	return ""
 }
 
 func antigravitySubscriptionPlan(subscription map[string]any) string {
@@ -147,7 +186,7 @@ func antigravitySubscriptionPlan(subscription map[string]any) string {
 	return firstString(subscription, "tierId", "tier", "plan")
 }
 
-// ParseAntigravityQuotaPayload normalizes known and likely Cloud Code Assist quota response shapes.
+// ParseAntigravityQuotaPayload normalizes Cloud Code Assist model quota response shapes.
 func ParseAntigravityQuotaPayload(data map[string]any) AntigravityQuotaReport {
 	report := AntigravityQuotaReport{Plan: firstString(data, "tierId", "tier", "plan", "plan_type")}
 	if report.Plan == "" {
@@ -159,40 +198,34 @@ func ParseAntigravityQuotaPayload(data map[string]any) AntigravityQuotaReport {
 		report.Plan = "unknown"
 	}
 
-	models := antigravityModelEntries(data)
-	for _, model := range models {
+	seenModels := map[string]bool{}
+	seenQuotas := map[string]bool{}
+	for _, model := range antigravityModelEntries(data) {
 		id := firstString(model, "id", "name", "model", "modelId")
-		if id != "" {
-			report.Models = append(report.Models, id)
-		}
-		if quota := firstObject(model["quotaInfo"], model["quota"], model["rateLimit"], model["rate_limit"], model["usage"]); quota != nil {
-			name := id
-			if name == "" {
-				name = "Model quota"
-			}
-			report.Quotas = append(report.Quotas, formatAntigravityQuota(id, name, quota))
-		}
-	}
-
-	for _, key := range []string{"quota", "quotas", "rateLimit", "rate_limit", "usage", "limits"} {
-		if quota := objectValue(data[key]); quota != nil {
-			report.Quotas = append(report.Quotas, formatAntigravityQuota(key, quotaDisplayName(key), quota))
+		displayName := firstString(model, "displayName", "display_name")
+		if !includeAntigravityQuotaModel(id, displayName, boolValue(model["isInternal"])) {
 			continue
 		}
-		if items, ok := data[key].([]any); ok {
-			for i, item := range items {
-				quota := objectValue(item)
-				if quota == nil {
-					continue
-				}
-				name := firstString(quota, "name", "displayName", "id", "key", "limitName")
-				if name == "" {
-					name = fmt.Sprintf("Quota %d", i+1)
-				}
-				report.Quotas = append(report.Quotas, formatAntigravityQuota(name, name, quota))
-			}
+		if id != "" && !seenModels[id] {
+			seenModels[id] = true
+			report.Models = append(report.Models, id)
 		}
+		quota := firstObject(model["quotaInfo"], model["quota"], model["rateLimit"], model["rate_limit"], model["usage"])
+		if quota == nil || id == "" || seenQuotas[id] {
+			continue
+		}
+		formatted, ok := formatAntigravityQuota(id, displayName, quota)
+		if !ok {
+			continue
+		}
+		if formatted.Name == "" {
+			formatted.Name = id
+		}
+		seenQuotas[id] = true
+		report.Quotas = append(report.Quotas, formatted)
 	}
+	sort.Strings(report.Models)
+	sort.Slice(report.Quotas, func(i, j int) bool { return report.Quotas[i].Key < report.Quotas[j].Key })
 	return report
 }
 
@@ -224,63 +257,89 @@ func antigravityModelEntries(data map[string]any) []map[string]any {
 	return out
 }
 
-func formatAntigravityQuota(key string, name string, quota map[string]any) CodexQuota {
-	used, hasUsed := finiteValue(quota["used"], quota["usage"], quota["consumed"], quota["current"], quota["usedCount"], quota["consumedCount"])
-	total, hasTotal := finiteValue(quota["total"], quota["limit"], quota["maximum"], quota["max"], quota["limitCount"])
-	remaining, hasRemaining := finiteValue(quota["remaining"], quota["available"], quota["remainingCount"])
-	if remainingFraction, ok := finiteValue(quota["remainingFraction"]); ok && !hasRemaining {
-		total = 100
-		remaining = remainingFraction * 100
-		hasTotal, hasRemaining = true, true
+func includeAntigravityQuotaModel(id, displayName string, internal bool) bool {
+	if internal || strings.TrimSpace(id) == "" {
+		return false
 	}
-	percentUsed, hasPercent := finiteValue(quota["used_percent"], quota["usage_percent"], quota["percentUsed"], quota["usedPercentage"])
+	upperID := strings.ToUpper(strings.TrimSpace(id))
+	if strings.HasPrefix(upperID, "MODEL_PLACEHOLDER_") {
+		return false
+	}
+	if strings.HasPrefix(upperID, "MODEL_CHAT_") && strings.TrimSpace(displayName) == "" {
+		return false
+	}
+	return true
+}
 
-	if hasPercent && !hasTotal {
-		used = percentUsed
-		total = 100
-		remaining = 100 - used
-		hasUsed, hasTotal, hasRemaining = true, true, true
+func formatAntigravityQuota(key, name string, quota map[string]any) (CodexQuota, bool) {
+	fraction, ok := finiteValue(quota["remainingFraction"])
+	if !ok || math.IsNaN(fraction) || math.IsInf(fraction, 0) {
+		return CodexQuota{}, false
 	}
-	if !hasRemaining && hasUsed && hasTotal {
-		remaining = total - used
-		hasRemaining = true
-	}
-	if !hasUsed && hasRemaining && hasTotal {
-		used = total - remaining
-		hasUsed = true
-	}
-	if !hasTotal {
-		total = 100
-	}
-	if !hasUsed {
-		used = 0
-	}
-	if !hasRemaining {
-		remaining = total - used
-	}
-	if key == "" {
-		key = strings.ToLower(strings.ReplaceAll(name, " ", "_"))
-	}
+	fraction = math.Max(0, math.Min(1, fraction))
+	remaining := math.Round(fraction * 100)
 	return CodexQuota{
 		Key:       key,
 		Name:      name,
-		Used:      used,
-		Total:     total,
+		Used:      100 - remaining,
+		Total:     100,
 		Remaining: remaining,
-		ResetAt:   parseResetTimeAny(firstNonNil(quota["reset_at"], quota["resetAt"], quota["reset_time"], quota["resetsAt"], quota["resetTime"])),
+		ResetAt:   parseAntigravityResetTime(firstNonNil(quota["reset_at"], quota["resetAt"], quota["reset_time"], quota["resetsAt"], quota["resetTime"])),
 		Unlimited: boolValue(quota["unlimited"]),
-	}
+	}, true
 }
 
-func quotaDisplayName(key string) string {
-	switch key {
-	case "rateLimit", "rate_limit":
-		return "Rate limit"
-	case "usage":
-		return "Usage"
-	case "limits":
-		return "Limits"
-	default:
-		return "Quota"
+func parseAntigravityResetTime(value any) string {
+	if value == nil {
+		return ""
 	}
+	if text, ok := value.(string); ok {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return ""
+		}
+		if parsed, err := time.Parse(time.RFC3339Nano, text); err == nil {
+			return parsed.UTC().Format(time.RFC3339Nano)
+		}
+		number, err := strconv.ParseFloat(text, 64)
+		if err != nil {
+			return ""
+		}
+		return antigravityUnixTime(number)
+	}
+	switch number := value.(type) {
+	case int:
+		return antigravityUnixTime(float64(number))
+	case int64:
+		return antigravityUnixTime(float64(number))
+	case int32:
+		return antigravityUnixTime(float64(number))
+	case uint:
+		return antigravityUnixTime(float64(number))
+	case uint64:
+		return antigravityUnixTime(float64(number))
+	case uint32:
+		return antigravityUnixTime(float64(number))
+	}
+	number, ok := finiteValue(value)
+	if !ok {
+		return ""
+	}
+	return antigravityUnixTime(number)
+}
+
+func antigravityUnixTime(value float64) string {
+	if math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 {
+		return ""
+	}
+	seconds := value
+	if value >= 1e12 {
+		seconds = value / 1000
+	}
+	whole, fraction := math.Modf(seconds)
+	parsed := time.Unix(int64(whole), int64(fraction*float64(time.Second))).UTC()
+	if parsed.Year() < 2000 || parsed.Year() > 3000 {
+		return ""
+	}
+	return parsed.Format(time.RFC3339Nano)
 }

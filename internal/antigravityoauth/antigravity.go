@@ -70,7 +70,7 @@ func NewManager(st store.Store) *Manager {
 
 func (m *Manager) Start(providerID string, proxyURL string) (SessionStatus, error) {
 	providerID = strings.TrimSpace(providerID)
-	if providerID == "" || providerID == "antigravity" {
+	if providerID == "" {
 		providerID = m.nextProviderID(providerID)
 	}
 	state, err := randomURLSafe(32)

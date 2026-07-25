@@ -1,0 +1,41 @@
+{{template "layout_start" .}}
+<section class="providers-hero dashboard-hero-modern guardrail-hero">
+  <div><p class="eyebrow">Guardrails</p><h1>Guardrails</h1><p>{{if eq .Lang "vi"}}Tạo model ảo tối ưu đầu vào và kiểm duyệt đầu ra bằng biểu mẫu trực quan. Không cần viết JSON.{{else}}Build virtual models that optimize input and validate output. No JSON editing required.{{end}}</p></div>
+  <div class="dashboard-status-pill"><span>{{if eq .Lang "vi"}}Đã cấu hình{{else}}Configured{{end}}</span><strong id="guardrail-count">{{len .Settings.Guardrails}}</strong></div>
+</section>
+<form method="post" class="settings-modern-grid guardrail-page" id="guardrail-form">
+  <textarea name="guardrails" id="guardrails-text" hidden>{{.GuardrailsText}}</textarea>
+  <section class="panel settings-card settings-card-wide guardrail-editor-card">
+    <div class="section-title-row"><div><p class="eyebrow">Visual builder</p><h2>{{if eq .Lang "vi"}}Tạo / sửa Guardrail{{else}}Create / edit Guardrail{{end}}</h2><p>{{if eq .Lang "vi"}}Chọn model cho từng bước, chính sách kiểm tra và giới hạn an toàn.{{else}}Choose each pipeline model, validation policies, and safety limits.{{end}}</p></div><div class="inline-actions"><button type="button" class="btn-secondary" id="guardrail-reset">{{if eq .Lang "vi"}}Tạo mới{{else}}New{{end}}</button><button type="button" id="guardrail-save">{{if eq .Lang "vi"}}Thêm vào danh sách{{else}}Add to list{{end}}</button></div></div>
+    <div class="provider-form-grid guardrail-basic-grid">
+      <label>{{if eq .Lang "vi"}}Tên / model ID{{else}}Name / model ID{{end}}<input id="guardrail-name" placeholder="guarded-code" maxlength="80"></label>
+      <label>{{if eq .Lang "vi"}}Mô tả{{else}}Description{{end}}<input id="guardrail-description" maxlength="240" placeholder="{{if eq .Lang "vi"}}Kiểm duyệt trợ lý code{{else}}Validated coding assistant{{end}}"></label>
+      <label class="checkbox guardrail-toggle"><span><strong>{{if eq .Lang "vi"}}Bật Guardrail{{else}}Enabled{{end}}</strong><small>{{if eq .Lang "vi"}}Hiện như một model ảo{{else}}Expose as a virtual model{{end}}</small></span><input id="guardrail-enabled" type="checkbox" checked></label>
+      <label class="checkbox guardrail-toggle"><span><strong>{{if eq .Lang "vi"}}Tối ưu đầu vào{{else}}Input optimizer{{end}}</strong><small>{{if eq .Lang "vi"}}Dùng model rẻ để rút gọn text{{else}}Use a cheaper model to compact text{{end}}</small></span><input id="guardrail-optimizer-enabled" type="checkbox" checked></label>
+      <label class="checkbox guardrail-toggle"><span><strong>{{if eq .Lang "vi"}}Kiểm tra đầu ra{{else}}Output validator{{end}}</strong><small>{{if eq .Lang "vi"}}Kiểm tra và sửa output trước khi trả client{{else}}Validate and rewrite output before delivery{{end}}</small></span><input id="guardrail-validator-enabled" type="checkbox" checked></label>
+    </div>
+    <div class="guardrail-pipeline" aria-label="Guardrail pipeline">
+      <label class="guardrail-stage"><span>1</span><strong>Optimizer</strong><select id="guardrail-optimizer-target" data-guardrail-target><option value="">{{if eq .Lang "vi"}}Chọn model rẻ...{{else}}Select cheap model...{{end}}</option>{{range .AvailableModels}}<option value="{{.Value}}">{{.Value}}</option>{{end}}{{range .Settings.Combos}}{{if .Enabled}}<option value="{{.Name}}">{{.Name}} · combo</option>{{end}}{{end}}</select></label>
+      <i>→</i><label class="guardrail-stage is-primary"><span>2</span><strong>{{if eq .Lang "vi"}}Model chính{{else}}Main model{{end}}</strong><select id="guardrail-main-target" data-guardrail-target><option value="">{{if eq .Lang "vi"}}Chọn model chính...{{else}}Select main model...{{end}}</option>{{range .AvailableModels}}<option value="{{.Value}}">{{.Value}}</option>{{end}}{{range .Settings.Combos}}{{if .Enabled}}<option value="{{.Name}}">{{.Name}} · combo</option>{{end}}{{end}}</select></label>
+      <i>→</i><label class="guardrail-stage"><span>3</span><strong>Validator</strong><select id="guardrail-validator-target" data-guardrail-target><option value="">{{if eq .Lang "vi"}}Chọn model kiểm tra...{{else}}Select validator...{{end}}</option>{{range .AvailableModels}}<option value="{{.Value}}">{{.Value}}</option>{{end}}{{range .Settings.Combos}}{{if .Enabled}}<option value="{{.Name}}">{{.Name}} · combo</option>{{end}}{{end}}</select></label>
+    </div>
+    <div class="guardrail-policy-section"><h3>{{if eq .Lang "vi"}}Tiêu chuẩn đầu ra{{else}}Output policies{{end}}</h3><div class="guardrail-policy-grid">
+      <label><input type="checkbox" data-guardrail-policy value="safety" checked><strong>🛡 Safety</strong><small>{{if eq .Lang "vi"}}Nội dung nguy hiểm{{else}}Harmful content{{end}}</small></label>
+      <label><input type="checkbox" data-guardrail-policy value="quality" checked><strong>✓ Quality</strong><small>{{if eq .Lang "vi"}}Đúng trọng tâm, đầy đủ{{else}}Relevant and complete{{end}}</small></label>
+      <label><input type="checkbox" data-guardrail-policy value="format" checked><strong>≡ Format</strong><small>{{if eq .Lang "vi"}}Tuân thủ yêu cầu định dạng{{else}}Instruction and format compliance{{end}}</small></label>
+      <label><input type="checkbox" data-guardrail-policy value="privacy" checked><strong>◉ Privacy</strong><small>{{if eq .Lang "vi"}}Bí mật và dữ liệu cá nhân{{else}}Secrets and personal data{{end}}</small></label>
+    </div></div>
+    <label class="wide guardrail-custom-policy">{{if eq .Lang "vi"}}Quy tắc riêng{{else}}Custom policy{{end}}<textarea id="guardrail-custom-policy" rows="4" maxlength="8000" placeholder="{{if eq .Lang "vi"}}Ví dụ: Không tiết lộ secret; mọi nhận định phải có căn cứ...{{else}}Example: Never expose secrets; unsupported claims must be removed...{{end}}"></textarea><small><span id="guardrail-policy-count">0</span>/8000</small></label>
+    <div class="guardrail-warning">⚠ {{if eq .Lang "vi"}}Output được buffer và kiểm tra trước khi trả. Nếu validator lỗi, mặc định output model chính vẫn được trả để đảm bảo khả dụng.{{else}}Output is buffered before delivery. If validation fails, the main output is returned by default for availability.{{end}}</div>
+    <details class="guardrail-advanced"><summary>{{if eq .Lang "vi"}}Cài đặt nâng cao{{else}}Advanced settings{{end}}</summary><div class="provider-form-grid">
+      <label>Optimizer timeout (ms)<input id="guardrail-optimizer-timeout" type="number" min="1000" max="180000" value="30000"></label><label>Main timeout (ms)<input id="guardrail-main-timeout" type="number" min="1000" max="180000" value="120000"></label><label>Validator timeout (ms)<input id="guardrail-validator-timeout" type="number" min="1000" max="180000" value="30000"></label>
+      <label>{{if eq .Lang "vi"}}Số patch tối đa{{else}}Max patches{{end}}<input id="guardrail-max-patches" type="number" min="1" max="1024" value="128"></label><label>Patch bytes<input id="guardrail-max-patch-bytes" type="number" min="1024" max="1048576" value="262144"></label><label>Buffered bytes<input id="guardrail-max-buffered-bytes" type="number" min="65536" max="16777216" value="4194304"></label>
+      <label class="checkbox guardrail-toggle"><span><strong>Optimizer fail-open</strong></span><input id="guardrail-optimizer-fail-open" type="checkbox" checked></label><label class="checkbox guardrail-toggle"><span><strong>Validator fail-open</strong></span><input id="guardrail-validator-fail-open" type="checkbox" checked></label>
+    </div></details>
+  </section>
+  <section class="panel settings-card settings-card-wide"><div class="section-title-row"><div><p class="eyebrow">{{if eq .Lang "vi"}}Đã lưu{{else}}Saved{{end}}</p><h2>{{if eq .Lang "vi"}}Danh sách Guardrail{{else}}Guardrail directory{{end}}</h2></div></div><div id="guardrail-card-grid" class="guardrail-card-grid"></div></section>
+  <details class="panel settings-card settings-card-wide guardrail-json-details"><summary>{{if eq .Lang "vi"}}Nâng cao: xem cấu hình được tạo tự động{{else}}Advanced: view generated configuration{{end}}</summary><pre id="guardrail-json-preview"></pre></details>
+  <div class="settings-submit-bar"><button type="submit">{{tr .T "common.save"}}</button></div>
+</form>
+<script src="/static/guardrails.js?v=20260724-guardrails-toggles1"></script>
+{{template "layout_end" .}}

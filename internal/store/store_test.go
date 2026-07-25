@@ -1,7 +1,9 @@
 package store
 
 import (
+	"sync"
 	"testing"
+	"time"
 )
 
 // storeFactory builds a fresh store rooted at a temp dir.
@@ -188,6 +190,79 @@ func TestStoreRequestLogRouterFields(t *testing.T) {
 				t.Fatalf("router fields were not persisted: %+v", got)
 			}
 		})
+	}
+}
+
+func TestStoreGuardrailSettings(t *testing.T) {
+	for _, f := range factories() {
+		t.Run(f.name, func(t *testing.T) {
+			st, closeFn, err := f.open(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeFn()
+			settings, err := st.GetSettings()
+			if err != nil {
+				t.Fatal(err)
+			}
+			settings.Guardrails = []Guardrail{{Name: "guard", Enabled: true, OptimizerEnabled: true, OptimizerTarget: "cheap/model", MainTarget: "main/model", ValidatorTarget: "cheap/model", CustomPolicy: "no secrets"}}
+			if err := st.SaveSettings(settings); err != nil {
+				t.Fatal(err)
+			}
+			got, err := st.GetSettings()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Guardrails) != 1 || got.Guardrails[0].Name != "guard" || got.Guardrails[0].MaxBufferedBytes == 0 {
+				t.Fatalf("guardrails = %#v", got.Guardrails)
+			}
+		})
+	}
+}
+
+func TestNormalizeGuardrailsIndependentStageToggles(t *testing.T) {
+	items := NormalizeGuardrails([]Guardrail{
+		{Name: "legacy", MainTarget: "main", ValidatorTarget: "check"},
+		{Name: "optimize-only", SchemaVersion: 1, OptimizerEnabled: true, ValidatorEnabled: false, OptimizerTarget: "cheap", MainTarget: "main"},
+		{Name: "validate-only", SchemaVersion: 1, OptimizerEnabled: false, ValidatorEnabled: true, MainTarget: "main", ValidatorTarget: "check"},
+		{Name: "main-only", SchemaVersion: 1, MainTarget: "main"},
+	})
+	if len(items) != 4 {
+		t.Fatalf("len = %d, want 4", len(items))
+	}
+	if !items[0].ValidatorEnabled {
+		t.Fatal("legacy guardrail did not retain validator behavior")
+	}
+	if items[1].ValidatorEnabled || !items[1].OptimizerEnabled {
+		t.Fatalf("optimize-only toggles = %#v", items[1])
+	}
+	if !items[2].ValidatorEnabled || items[2].OptimizerEnabled {
+		t.Fatalf("validate-only toggles = %#v", items[2])
+	}
+	if items[3].ValidatorEnabled || items[3].OptimizerEnabled {
+		t.Fatalf("main-only toggles = %#v", items[3])
+	}
+}
+
+func TestNormalizeGuardrails(t *testing.T) {
+	items := []Guardrail{
+		{Name: " guard ", Enabled: true, OptimizerEnabled: true, OptimizerTarget: " cheap ", MainTarget: " main ", ValidatorTarget: " validate ", PolicyPresets: []string{"SAFETY", "unknown", "safety"}},
+		{Name: "guard", MainTarget: "other", ValidatorTarget: "validate"},
+		{Name: "self", MainTarget: "self", ValidatorTarget: "validate"},
+	}
+	got := NormalizeGuardrails(items)
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	item := got[0]
+	if item.Name != "guard" || item.OptimizerTarget != "cheap" || item.MainTarget != "main" || item.ValidatorTarget != "validate" {
+		t.Fatalf("unexpected normalized guardrail: %#v", item)
+	}
+	if item.ResponseMode != GuardrailResponseStream || !item.OptimizerFailOpen || !item.ValidatorFailOpen {
+		t.Fatalf("defaults not applied: %#v", item)
+	}
+	if len(item.PolicyPresets) != 1 || item.PolicyPresets[0] != "safety" {
+		t.Fatalf("policies = %#v", item.PolicyPresets)
 	}
 }
 
@@ -389,6 +464,146 @@ func TestStoreProxyCRUD(t *testing.T) {
 	}
 }
 
+func TestSQLiteListProviderAccountsWithProxyReturnsPromptly(t *testing.T) {
+	st, err := NewSQLiteStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertProvider(Provider{ID: "accounts-timeout", Type: ProviderOpenAICompatible, BaseURL: "https://example.test", Enabled: true}); err != nil {
+		_ = st.Close()
+		t.Fatal(err)
+	}
+	if err := st.UpsertProxy(Proxy{ID: "pool-timeout", Name: "Pool", URL: "http://proxy.test:8080", Enabled: true}); err != nil {
+		_ = st.Close()
+		t.Fatal(err)
+	}
+	if err := st.UpsertProviderAccount(ProviderAccount{ID: "acc-timeout", ProviderID: "accounts-timeout", ProxyID: "pool-timeout", Enabled: true}); err != nil {
+		_ = st.Close()
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := st.ListProviderAccounts("accounts-timeout")
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if closeErr := st.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			t.Fatalf("list provider accounts: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		// Do not close a store blocked waiting for its own only connection.
+		t.Fatal("ListProviderAccounts blocked while resolving a proxy")
+	}
+}
+
+func TestStoreRecordAPIKeyUsageConcurrent(t *testing.T) {
+	for _, f := range factories() {
+		t.Run(f.name, func(t *testing.T) {
+			st, closeFn, err := f.open(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeFn()
+			settings, err := st.GetSettings()
+			if err != nil {
+				t.Fatal(err)
+			}
+			settings.DashboardMessage = "preserve-me"
+			settings.APIKeys = []APIKeyPolicy{{ID: "usage-key", Key: "secret", Enabled: true, MaxRequests: 10000}}
+			if err := st.SaveSettings(settings); err != nil {
+				t.Fatal(err)
+			}
+
+			writers, increments := 1, 10
+			if f.name == "sqlite" {
+				writers, increments = 12, 5
+			}
+			var wg sync.WaitGroup
+			for i := 0; i < writers; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for j := 0; j < increments; j++ {
+						if err := st.RecordAPIKeyUsage("usage-key", APIKeyUsageDelta{Requests: 1, Tokens: 3, CostUSD: 0.25}); err != nil {
+							t.Errorf("record usage: %v", err)
+							return
+						}
+					}
+				}()
+			}
+			wg.Wait()
+			got, err := st.GetSettings()
+			if err != nil {
+				t.Fatal(err)
+			}
+			key := got.APIKeys[0]
+			want := writers * increments
+			if key.UsedRequests != want || key.UsedTokens != want*3 || key.UsedCostUSD != float64(want)*0.25 {
+				t.Fatalf("usage=%+v, want requests=%d tokens=%d cost=%.2f", key, want, want*3, float64(want)*0.25)
+			}
+			if got.DashboardMessage != "preserve-me" || key.MaxRequests != 10000 || key.Key != "secret" {
+				t.Fatalf("unrelated settings changed: %+v", got)
+			}
+			if err := st.RecordAPIKeyUsage("usage-key", APIKeyUsageDelta{Requests: -10, Tokens: -10, CostUSD: -1}); err != nil {
+				t.Fatal(err)
+			}
+			afterNegative, _ := st.GetSettings()
+			if afterNegative.APIKeys[0].UsedRequests != want || afterNegative.APIKeys[0].UsedTokens != want*3 {
+				t.Fatalf("negative delta reduced usage: %+v", afterNegative.APIKeys[0])
+			}
+		})
+	}
+}
+
+func TestStoreProviderAccountsRoundTrip(t *testing.T) {
+	for _, f := range factories() {
+		t.Run(f.name, func(t *testing.T) {
+			st, closeFn, err := f.open(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeFn()
+			if err := st.UpsertProvider(Provider{ID: "accounts", Type: ProviderOpenAICompatible, BaseURL: "https://example.test", Enabled: true, Models: []string{"m"}}); err != nil {
+				t.Fatal(err)
+			}
+			if err := st.UpsertProxy(Proxy{ID: "pool", Name: "Pool", URL: "http://user:pass@proxy.test:8080", Enabled: true}); err != nil {
+				t.Fatal(err)
+			}
+			account := ProviderAccount{ID: "acc-a", ProviderID: "accounts", Name: "Primary", AuthType: "api_key", APIKey: "secret", ProxyID: "pool", Enabled: true, Priority: 2, QuotaLimitPercent: 70}
+			if err := st.UpsertProviderAccount(account); err != nil {
+				t.Fatal(err)
+			}
+			items, err := st.ListProviderAccounts("accounts")
+			if err != nil || len(items) != 1 {
+				t.Fatalf("accounts=%+v err=%v", items, err)
+			}
+			if items[0].ProxyURL != "http://user:pass@proxy.test:8080" || items[0].APIKey != "secret" || items[0].Priority != 2 || items[0].QuotaLimitPercent != 70 {
+				t.Fatalf("account not persisted/resolved: %+v", items[0])
+			}
+			now := time.Now().UTC()
+			if err := st.RecordProviderAccountOutcome("acc-a", ProviderAccountOutcome{FailureStreak: 2, CooldownUntil: now.Add(time.Minute), CooldownReason: "rate_limited", At: now}); err != nil {
+				t.Fatal(err)
+			}
+			got, found, err := st.GetProviderAccount("acc-a")
+			if err != nil || !found || got.FailureStreak != 2 || got.CooldownReason != "rate_limited" {
+				t.Fatalf("failure outcome=%+v found=%v err=%v", got, found, err)
+			}
+			if err := st.RecordProviderAccountOutcome("acc-a", ProviderAccountOutcome{Success: true, At: now}); err != nil {
+				t.Fatal(err)
+			}
+			got, _, _ = st.GetProviderAccount("acc-a")
+			if got.FailureStreak != 0 || !got.CooldownUntil.IsZero() || got.LastSuccessAt.IsZero() {
+				t.Fatalf("success did not reset account: %+v", got)
+			}
+		})
+	}
+}
+
 func TestStoreProviderProxyIDRoundTrip(t *testing.T) {
 	for _, f := range factories() {
 		t.Run(f.name, func(t *testing.T) {
@@ -418,8 +633,24 @@ func TestStoreProviderProxyIDRoundTrip(t *testing.T) {
 			if err != nil || !found {
 				t.Fatalf("get provider: found=%v err=%v", found, err)
 			}
-			if got.ProxyID != "proxy-a" {
-				t.Fatalf("provider proxy_id = %q, want proxy-a", got.ProxyID)
+			if got.ProxyID != "proxy-a" || got.ProxyURL != "http://127.0.0.1:8080" {
+				t.Fatalf("provider proxy resolution = id %q url %q", got.ProxyID, got.ProxyURL)
+			}
+			providers, err := st.ListProviders()
+			if err != nil {
+				t.Fatalf("list providers: %v", err)
+			}
+			found = false
+			for _, provider := range providers {
+				if provider.ID == "proxy-provider" {
+					found = true
+					if provider.ProxyID != "proxy-a" || provider.ProxyURL != "http://127.0.0.1:8080" {
+						t.Fatalf("listed provider proxy resolution = id %q url %q", provider.ProxyID, provider.ProxyURL)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("proxy-provider missing from ListProviders")
 			}
 		})
 	}

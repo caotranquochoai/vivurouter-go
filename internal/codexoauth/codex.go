@@ -45,6 +45,7 @@ type Manager struct {
 
 type SessionStatus struct {
 	ProviderID  string    `json:"provider_id"`
+	AccountID   string    `json:"account_id,omitempty"`
 	State       string    `json:"state"`
 	AuthURL     string    `json:"auth_url"`
 	CallbackURL string    `json:"callback_url"`
@@ -72,11 +73,27 @@ func NewManager(st store.Store) *Manager {
 	}
 }
 
-func (m *Manager) Start(providerID string, proxyURL string) (SessionStatus, error) {
+func (m *Manager) Start(providerID string, accountID string, proxyURL string) (SessionStatus, error) {
 	providerID = strings.TrimSpace(providerID)
+	accountID = strings.TrimSpace(accountID)
 	proxyURL = strings.TrimSpace(proxyURL)
-	if providerID == "" || providerID == "codex" {
+	if providerID == "" {
 		providerID = m.nextCodexProviderID(providerID)
+	}
+	if accountID != "" {
+		account, found, err := m.store.GetProviderAccount(accountID)
+		if err != nil {
+			return SessionStatus{}, err
+		}
+		if !found {
+			return SessionStatus{}, fmt.Errorf("Codex account %q not found", accountID)
+		}
+		if account.ProviderID != providerID {
+			return SessionStatus{}, fmt.Errorf("Codex account %q belongs to provider %q", accountID, account.ProviderID)
+		}
+		if proxyURL == "" {
+			proxyURL = account.ProxyURL
+		}
 	}
 
 	verifier, challenge, state, err := GeneratePKCE()
@@ -86,6 +103,7 @@ func (m *Manager) Start(providerID string, proxyURL string) (SessionStatus, erro
 
 	status := SessionStatus{
 		ProviderID:  providerID,
+		AccountID:   accountID,
 		State:       state,
 		AuthURL:     BuildAuthURLWithBase(m.authorizeURL, RedirectURI, state, challenge),
 		CallbackURL: RedirectURI,
@@ -158,7 +176,7 @@ func (m *Manager) CompleteWithCallbackURL(ctx context.Context, callbackURL strin
 		m.finishError(state, err.Error())
 		return err
 	}
-	if err := m.saveTokens(session.ProviderID, tokens); err != nil {
+	if err := m.saveTokens(session.ProviderID, session.AccountID, session.ProxyURL, tokens); err != nil {
 		m.finishError(state, err.Error())
 		return err
 	}
@@ -212,7 +230,7 @@ func (m *Manager) handleCallback(w http.ResponseWriter, r *http.Request) {
 		m.writeResult(w, false, err.Error())
 		return
 	}
-	if err := m.saveTokens(session.ProviderID, tokens); err != nil {
+	if err := m.saveTokens(session.ProviderID, session.AccountID, session.ProxyURL, tokens); err != nil {
 		m.finishError(state, err.Error())
 		m.writeResult(w, false, err.Error())
 		return
@@ -291,7 +309,30 @@ func (m *Manager) nextCodexProviderID(requested string) string {
 	return requested + "-" + time.Now().UTC().Format("20060102150405")
 }
 
-func (m *Manager) saveTokens(providerID string, tokens tokenResponse) error {
+func (m *Manager) saveTokens(providerID string, accountID string, proxyURL string, tokens tokenResponse) error {
+	if accountID != "" {
+		account, found, err := m.store.GetProviderAccount(accountID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("Codex account %q not found", accountID)
+		}
+		if account.ProviderID != providerID {
+			return fmt.Errorf("Codex account %q belongs to provider %q", accountID, account.ProviderID)
+		}
+		account.AuthType = "oauth"
+		account.AccessToken = tokens.AccessToken
+		if tokens.RefreshToken != "" {
+			account.RefreshToken = tokens.RefreshToken
+		}
+		if proxyURL != "" {
+			account.ProxyURL = proxyURL
+		}
+		account.Enabled = true
+		return m.store.UpsertProviderAccount(account)
+	}
+
 	provider, found, err := m.store.GetProvider(providerID)
 	if err != nil {
 		return err

@@ -14,7 +14,7 @@ import (
 
 func passthroughAnthropicJSONWithUsage(w http.ResponseWriter, resp *http.Response, requestBody map[string]any, model string) (usageInfo, error) {
 	copyHeaders(w.Header(), resp.Header)
-	raw, readErr := io.ReadAll(resp.Body)
+	raw, readErr := readNonStreamResponse(resp.Body)
 	if readErr != nil {
 		return usageInfo{}, readErr
 	}
@@ -94,6 +94,8 @@ func streamOpenAIOrResponsesToAnthropic(ctx context.Context, w http.ResponseWrit
 		finalSent = true
 		if !usage.hasTokens() {
 			usage = estimateUsage(requestBody, outputChars)
+		} else {
+			usage = usage.ensureOutputEstimated(outputChars)
 		}
 		if contentStarted {
 			if err := emit("content_block_stop", map[string]any{"type": "content_block_stop", "index": textBlockIndex}); err != nil {

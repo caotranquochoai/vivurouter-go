@@ -60,6 +60,7 @@ type providerActionInput struct {
 	Model      string `json:"model"`
 	Kind       string `json:"kind"`
 	Apply      bool   `json:"apply"`
+	Hidden     bool   `json:"hidden"`
 }
 
 type modelTestResult struct {
@@ -163,6 +164,73 @@ func (h *Handlers) CodexQuotaAPI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, report)
 }
 
+func (h *Handlers) ProviderAccountQuotaAPI(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdminAPI(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	providerID := strings.TrimSpace(r.URL.Query().Get("provider_id"))
+	accountID := strings.TrimSpace(r.URL.Query().Get("account_id"))
+	if providerID == "" || accountID == "" {
+		writeError(w, http.StatusBadRequest, "missing provider_id or account_id")
+		return
+	}
+	providerConfig, found, err := h.store.GetProvider(providerID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "provider not found")
+		return
+	}
+	account, found, err := h.store.GetProviderAccount(accountID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !found || account.ProviderID != providerID {
+		writeError(w, http.StatusNotFound, "account not found")
+		return
+	}
+	if !account.Enabled {
+		writeError(w, http.StatusBadRequest, "account is disabled")
+		return
+	}
+
+	// Account credentials and proxy routing override the logical provider only
+	// for this request. They are never returned in the quota response.
+	providerConfig.APIKey = account.APIKey
+	providerConfig.AccessToken = account.AccessToken
+	providerConfig.RefreshToken = account.RefreshToken
+	if account.ProxyID != "" || account.ProxyURL != "" {
+		providerConfig.ProxyID = account.ProxyID
+		providerConfig.ProxyURL = account.ProxyURL
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	switch providerConfig.Type {
+	case store.ProviderCodex:
+		report, err := h.executors.Codex.FetchQuota(ctx, providerConfig)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"account_id": account.ID, "account_name": account.Name, "report": report})
+	case store.ProviderAntigravity:
+		report, err := h.fetchAntigravityQuotaWithRefresh(ctx, providerConfig, account.ID)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"account_id": account.ID, "account_name": account.Name, "report": report})
+	default:
+		writeError(w, http.StatusBadRequest, "quota is only available for Codex and Antigravity accounts")
+	}
+}
 func (h *Handlers) AntigravityQuotaAPI(w http.ResponseWriter, r *http.Request) {
 	if !h.requireAdminAPI(w, r) {
 		return
@@ -201,12 +269,72 @@ func (h *Handlers) AntigravityQuotaAPI(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
-	report, err := h.executors.Antigravity.FetchQuota(ctx, provider)
+	report, err := h.fetchAntigravityQuotaWithRefresh(ctx, provider, "")
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, report)
+}
+
+func (h *Handlers) fetchAntigravityQuotaWithRefresh(ctx context.Context, target store.Provider, accountID string) (upstream.AntigravityQuotaReport, error) {
+	report, err := h.executors.Antigravity.FetchQuota(ctx, target)
+	if err == nil || !upstream.IsAntigravityAuthError(err) || strings.TrimSpace(target.RefreshToken) == "" {
+		return report, err
+	}
+	updated, refreshErr := h.executors.Antigravity.RefreshAntigravityTokenForAccount(ctx, target, accountID)
+	if refreshErr != nil {
+		return upstream.AntigravityQuotaReport{}, refreshErr
+	}
+	return h.executors.Antigravity.FetchQuota(ctx, updated)
+}
+
+func (h *Handlers) ProviderModelVisibilityAPI(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdminAPI(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	input := readProviderActionInput(r)
+	if input.ProviderID == "" || input.Model == "" {
+		writeError(w, http.StatusBadRequest, "missing provider_id or model")
+		return
+	}
+	p, found, err := h.store.GetProvider(input.ProviderID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "provider not found")
+		return
+	}
+	model := strings.TrimSpace(input.Model)
+	remove := func(items []string) []string {
+		out := items[:0]
+		for _, item := range items {
+			if item != model {
+				out = append(out, item)
+			}
+		}
+		return out
+	}
+	p.Models = remove(p.Models)
+	p.HiddenModels = remove(p.HiddenModels)
+	if input.Hidden {
+		p.HiddenModels = append(p.HiddenModels, model)
+	} else {
+		p.Models = append(p.Models, model)
+	}
+	p.Models = store.NormalizeModels(p.Models)
+	p.HiddenModels = store.NormalizeModels(p.HiddenModels)
+	if err := h.store.UpsertProvider(p); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "hidden": input.Hidden, "model": model})
 }
 
 func (h *Handlers) ProviderModelTestAPI(w http.ResponseWriter, r *http.Request) {
@@ -492,6 +620,7 @@ func readProviderActionInput(r *http.Request) providerActionInput {
 			if body.Apply {
 				input.Apply = true
 			}
+			input.Hidden = body.Hidden
 		}
 		return input
 	}

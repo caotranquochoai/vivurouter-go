@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,16 +37,76 @@ type AntigravityExecutor struct {
 func (e *AntigravityExecutor) ExecuteChat(ctx context.Context, provider store.Provider, model string, body map[string]any) (*ExecuteResult, error) {
 	sessionID := antigravitySessionID(body)
 	transformed := antigravityRequest(model, body, sessionID)
-	result, err := e.executeChatOnce(ctx, provider, model, transformed, bodyStream(body), sessionID)
-	if err != nil || result.Response == nil || result.Response.StatusCode != http.StatusUnauthorized || strings.TrimSpace(provider.RefreshToken) == "" || e.Store == nil {
-		return result, err
+	stream := bodyStream(body)
+	refreshed := false
+	for attempt := 0; ; attempt++ {
+		result, err := e.executeChatOnce(ctx, provider, model, transformed, stream, sessionID)
+		if err != nil || result == nil || result.Response == nil {
+			return result, err
+		}
+		status := result.Response.StatusCode
+		if (status == http.StatusUnauthorized || status == http.StatusForbidden) && !refreshed && strings.TrimSpace(provider.RefreshToken) != "" && e.Store != nil {
+			_ = result.Response.Body.Close()
+			updated, refreshErr := e.RefreshAntigravityToken(ctx, provider)
+			if refreshErr != nil {
+				return nil, refreshErr
+			}
+			provider = updated
+			refreshed = true
+			continue
+		}
+		if (status == http.StatusTooManyRequests && attempt < 5) || (status == http.StatusServiceUnavailable && attempt < 2) {
+			delay := antigravityRetryDelay(result.Response, attempt)
+			_ = result.Response.Body.Close()
+			if err := waitAntigravityRetry(ctx, delay); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		return result, nil
 	}
-	_ = result.Response.Body.Close()
-	refreshed, refreshErr := e.RefreshAntigravityToken(ctx, provider)
-	if refreshErr != nil {
-		return nil, refreshErr
+}
+
+func antigravityRetryDelay(resp *http.Response, attempt int) time.Duration {
+	if retryAfter, ok := parseAntigravityRetryAfter(resp.Header.Get("Retry-After")); ok {
+		if retryAfter > 10*time.Second {
+			return 10 * time.Second
+		}
+		return retryAfter
 	}
-	return e.executeChatOnce(ctx, refreshed, model, transformed, bodyStream(body), sessionID)
+	delay := time.Second << attempt
+	if delay > 10*time.Second {
+		return 10 * time.Second
+	}
+	return delay
+}
+
+func parseAntigravityRetryAfter(value string) (time.Duration, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second, true
+	}
+	if when, err := http.ParseTime(value); err == nil {
+		delay := time.Until(when)
+		if delay > 0 {
+			return delay, true
+		}
+	}
+	return 0, false
+}
+
+func waitAntigravityRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (e *AntigravityExecutor) executeChatOnce(ctx context.Context, provider store.Provider, model string, transformed map[string]any, stream bool, sessionID string) (*ExecuteResult, error) {
@@ -95,6 +156,12 @@ func (e *AntigravityExecutor) executeChatOnce(ctx context.Context, provider stor
 }
 
 func (e *AntigravityExecutor) RefreshAntigravityToken(ctx context.Context, provider store.Provider) (store.Provider, error) {
+	return e.RefreshAntigravityTokenForAccount(ctx, provider, "")
+}
+
+// RefreshAntigravityTokenForAccount rotates an OAuth token without allowing a
+// managed account to overwrite the provider-level credential or another account.
+func (e *AntigravityExecutor) RefreshAntigravityTokenForAccount(ctx context.Context, provider store.Provider, accountID string) (store.Provider, error) {
 	if strings.TrimSpace(provider.RefreshToken) == "" {
 		return provider, fmt.Errorf("provider %s has no Antigravity refresh token", provider.ID)
 	}
@@ -141,7 +208,23 @@ func (e *AntigravityExecutor) RefreshAntigravityToken(ctx context.Context, provi
 		provider.RefreshToken = payload.RefreshToken
 	}
 	if e.Store != nil {
-		if err := e.Store.UpsertProvider(provider); err != nil {
+		if accountID != "" {
+			account, found, err := e.Store.GetProviderAccount(accountID)
+			if err != nil {
+				return provider, err
+			}
+			if !found {
+				return provider, fmt.Errorf("Antigravity account %q not found", accountID)
+			}
+			if account.ProviderID != provider.ID {
+				return provider, fmt.Errorf("Antigravity account %q belongs to provider %q", accountID, account.ProviderID)
+			}
+			account.AccessToken = provider.AccessToken
+			account.RefreshToken = provider.RefreshToken
+			if err := e.Store.UpsertProviderAccount(account); err != nil {
+				return provider, err
+			}
+		} else if err := e.Store.UpsertProvider(provider); err != nil {
 			return provider, err
 		}
 	}

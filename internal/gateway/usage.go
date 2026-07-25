@@ -3,12 +3,12 @@ package gateway
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"math"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/local/vivurouter-go/internal/store"
 )
@@ -28,6 +28,7 @@ type usageInfo struct {
 	ReasoningTokens  int
 	Estimated        bool
 	CostUSD          float64
+	DebugResponse    string
 }
 
 func (u usageInfo) hasTokens() bool {
@@ -104,13 +105,34 @@ func (u usageInfo) ensureEstimated(requestBody map[string]any, outputChars int) 
 	return estimateUsage(requestBody, outputChars)
 }
 
+// ensureOutputEstimated preserves upstream usage while filling a missing output
+// count from the response body/stream. Several Codex-compatible upstreams report
+// input usage but omit completion_tokens, which otherwise makes output cost zero.
+func (u usageInfo) ensureOutputEstimated(outputChars int) usageInfo {
+	if u.CompletionTokens > 0 || outputChars <= 0 {
+		return u
+	}
+	outputTokens := estimateOutputTokens(outputChars)
+	if outputTokens <= 0 {
+		return u
+	}
+	u.CompletionTokens = outputTokens
+	if u.TotalTokens <= 0 || u.TotalTokens < u.PromptTokens+u.CompletionTokens {
+		u.TotalTokens = u.PromptTokens + u.CompletionTokens
+	}
+	u.Estimated = true
+	return u
+}
+
 func AnalyzeUsage(provider store.Provider, model string, requestBody map[string]any, rawResponse []byte, outputChars int) PublicUsageInfo {
 	usage, ok := extractUsageFromJSON(rawResponse)
+	if outputChars <= 0 {
+		outputChars = estimateOutputCharsFromJSON(rawResponse)
+	}
 	if !ok || !usage.hasTokens() {
-		if outputChars <= 0 {
-			outputChars = estimateOutputCharsFromJSON(rawResponse)
-		}
 		usage = estimateUsage(requestBody, outputChars)
+	} else {
+		usage = usage.ensureOutputEstimated(outputChars)
 	}
 	usage = usage.withCost(provider, model)
 	return PublicUsageInfo{
@@ -126,16 +148,22 @@ func AnalyzeUsage(provider store.Provider, model string, requestBody map[string]
 
 func passthroughJSONWithUsage(w http.ResponseWriter, resp *http.Response, requestBody map[string]any) (usageInfo, error) {
 	copyHeaders(w.Header(), resp.Header)
-	raw, readErr := io.ReadAll(resp.Body)
+	raw, readErr := readNonStreamResponse(resp.Body)
 	if readErr != nil {
 		return usageInfo{}, readErr
 	}
 
 	usage, ok := extractUsageFromJSON(raw)
+	outputChars := estimateOutputCharsFromJSON(raw)
 	if !ok || !usage.hasTokens() {
-		usage = estimateUsage(requestBody, estimateOutputCharsFromJSON(raw))
+		usage = estimateUsage(requestBody, outputChars)
+	} else {
+		usage = usage.ensureOutputEstimated(outputChars)
+	}
+	if usage.Estimated {
 		raw = ensureUsageInJSON(raw, usage)
 	}
+	usage.DebugResponse = string(raw)
 
 	w.WriteHeader(resp.StatusCode)
 	if len(raw) > 0 {
@@ -294,7 +322,11 @@ func estimateInputTokens(body map[string]any) int {
 	if err != nil {
 		return 0
 	}
-	return estimateOutputTokens(len(raw))
+	// JSON is UTF-8. Counting bytes significantly overestimates multilingual
+	// prompts because one Unicode character occupies multiple bytes, which can
+	// make the capability planner reject requests that fit upstream. Rune count
+	// remains an estimate, but tracks client token counters much more closely.
+	return estimateOutputTokens(utf8.RuneCount(raw))
 }
 
 func estimateOutputTokens(chars int) int {
@@ -444,18 +476,36 @@ func pricingFor(provider store.Provider, model string) usagePricing {
 
 func pricingFromSettings(settings store.Settings, provider store.Provider, model string) (usagePricing, bool) {
 	modelKeys := pricingModelKeys(model)
+	var matched store.ModelPriceRule
+	bestScore := -1
 	for _, rule := range settings.ModelPrices {
 		providerID := strings.TrimSpace(rule.ProviderID)
-		if providerID != "" && providerID != provider.ID {
+		providerMatch := providerID == "" || providerID == provider.ID
+		if !providerMatch {
 			continue
 		}
 		ruleModel := strings.ToLower(strings.TrimSpace(rule.Model))
-		if ruleModel != "" && !containsString(modelKeys, ruleModel) {
+		modelMatch := ruleModel == "" || containsString(modelKeys, ruleModel)
+		if !modelMatch {
 			continue
 		}
-		return usagePricing{Input: rule.InputPer1M, Output: rule.OutputPer1M, CachedInput: rule.CachedInputPer1M, Reasoning: rule.ReasoningPer1M}, true
+
+		score := 0
+		if ruleModel != "" {
+			score += 3
+		}
+		if providerID != "" {
+			score += 1
+		}
+		if score > bestScore {
+			matched = rule
+			bestScore = score
+		}
 	}
-	return usagePricing{}, false
+	if bestScore < 0 {
+		return usagePricing{}, false
+	}
+	return usagePricing{Input: matched.InputPer1M, Output: matched.OutputPer1M, CachedInput: matched.CachedInputPer1M, Reasoning: matched.ReasoningPer1M}, true
 }
 
 func pricingModelKeys(model string) []string {

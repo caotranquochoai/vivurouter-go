@@ -40,9 +40,16 @@ func modelMetadata(providerID string, model string, settings store.Settings) map
 }
 
 func contextLengthForModel(providerID string, model string, settings store.Settings) int {
+	if contextLength, ok := knownContextLengthForModel(providerID, model, settings); ok {
+		return contextLength
+	}
+	return defaultContextLength
+}
+
+func knownContextLengthForModel(providerID string, model string, settings store.Settings) (int, bool) {
 	model = strings.TrimSpace(model)
 	if contextLength := contextLengthFromSettings(providerID, model, settings); contextLength > 0 {
-		return contextLength
+		return contextLength, true
 	}
 	candidates := []string{model}
 	if strings.Contains(model, "/") {
@@ -55,10 +62,10 @@ func contextLengthForModel(providerID string, model string, settings store.Setti
 	for _, candidate := range candidates {
 		candidate = strings.ToLower(strings.TrimSpace(candidate))
 		if value, ok := knownContextLengths[candidate]; ok {
-			return value
+			return value, true
 		}
 	}
-	return defaultContextLength
+	return 0, false
 }
 
 func contextLengthFromSettings(providerID string, model string, settings store.Settings) int {

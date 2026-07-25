@@ -16,20 +16,32 @@
 <section class="provider-catalog-toolbar">
   <div class="provider-search-wrap"><span>⌕</span><input type="search" id="provider-catalog-search" placeholder="{{if eq .Lang "vi"}}Tìm provider, model, trạng thái...{{else}}Search providers, models, status...{{end}}"></div>
   <div class="provider-add-menu provider-preset-menu">
+    <form class="provider-import-form" method="post" action="/api/provider/import" enctype="multipart/form-data">
+      <label class="btn-secondary provider-import-btn">{{if eq .Lang "vi"}}Nhập JSON{{else}}Import JSON{{end}}<input name="provider_file" type="file" accept="application/json,.json" onchange="this.form.submit()" hidden></label>
+    </form>
     <button type="button" class="provider-add-btn provider-add-wide js-provider-add-toggle" aria-expanded="false">+ {{if eq .Lang "vi"}}Thêm provider{{else}}Add provider{{end}}</button>
     <div class="provider-preset-dropdown" hidden>
-      <button type="button" data-open-modal="oauth-provider-modal">Codex OAuth <small>{{if eq .Lang "vi"}}Đăng nhập OAuth/local token{{else}}OAuth/local token login{{end}}</small></button>
-      <button type="button" data-open-modal="antigravity-oauth-modal">Antigravity OAuth <small>{{if eq .Lang "vi"}}Lấy Google OAuth token{{else}}Google OAuth token login{{end}}</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="openai">OpenAI <small>https://api.openai.com/v1</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="openrouter">OpenRouter <small>https://openrouter.ai/api/v1</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="groq">Groq <small>https://api.groq.com/openai/v1</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="ollama">Ollama/local <small>http://localhost:11434/v1</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="vivurouter">vivurouter upstream <small>OpenAI-compatible</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="mimo-free">MiMo Code Free <small>{{if eq .Lang "vi"}}Free/no-auth{{else}}Free/no-auth{{end}}</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="opencode">OpenCode Free <small>{{if eq .Lang "vi"}}Bearer public/no-auth{{else}}Bearer public/no-auth{{end}}</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="antigravity">Antigravity <small>{{if eq .Lang "vi"}}Google OAuth token{{else}}Google OAuth token{{end}}</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="anthropic-proxy">Anthropic proxy <small>{{if eq .Lang "vi"}}Proxy tương thích OpenAI{{else}}OpenAI-compatible proxy{{end}}</small></button>
-      <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="gemini-proxy">Gemini proxy <small>{{if eq .Lang "vi"}}Proxy tương thích OpenAI{{else}}OpenAI-compatible proxy{{end}}</small></button>
+      <div class="provider-preset-group"><span>{{if eq .Lang "vi"}}OAuth / đăng nhập{{else}}OAuth / account login{{end}}</span>
+        <button type="button" data-open-modal="oauth-provider-modal">Codex OAuth <small>{{if eq .Lang "vi"}}Đăng nhập OAuth/local token{{else}}OAuth/local token login{{end}}</small></button>
+        <button type="button" data-open-modal="antigravity-oauth-modal">Antigravity OAuth <small>{{if eq .Lang "vi"}}Lấy Google OAuth token{{else}}Google OAuth token login{{end}}</small></button>
+      </div>
+      <div class="provider-preset-group"><span>{{if eq .Lang "vi"}}Provider phổ biến{{else}}Popular API providers{{end}}</span>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="openai">OpenAI <small>https://api.openai.com/v1</small></button>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="openrouter">OpenRouter <small>https://openrouter.ai/api/v1</small></button>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="groq">Groq <small>https://api.groq.com/openai/v1</small></button>
+      </div>
+      <div class="provider-preset-group"><span>{{if eq .Lang "vi"}}Local / proxy / compatible{{else}}Local / proxy / compatible{{end}}</span>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="custom">Custom OpenAI-compatible <small>{{if eq .Lang "vi"}}Endpoint tùy chỉnh{{else}}Custom endpoint{{end}}</small></button>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="ollama">Ollama/local <small>http://localhost:11434/v1</small></button>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="vivurouter">VivuRouter upstream <small>OpenAI-compatible</small></button>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="anthropic-proxy">Anthropic proxy <small>{{if eq .Lang "vi"}}Proxy tương thích OpenAI{{else}}OpenAI-compatible proxy{{end}}</small></button>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="gemini-proxy">Gemini proxy <small>{{if eq .Lang "vi"}}Proxy tương thích OpenAI{{else}}OpenAI-compatible proxy{{end}}</small></button>
+      </div>
+      <div class="provider-preset-group"><span>{{if eq .Lang "vi"}}Free tier / token đặc biệt{{else}}Free tier / special token{{end}}</span>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="mimo-free">MiMo Code Free <small>{{if eq .Lang "vi"}}Free/no-auth{{else}}Free/no-auth{{end}}</small></button>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="opencode">OpenCode Free <small>{{if eq .Lang "vi"}}Bearer public/no-auth{{else}}Bearer public/no-auth{{end}}</small></button>
+        <button type="button" data-open-modal="apikey-provider-modal" data-provider-preset="antigravity">Antigravity token <small>{{if eq .Lang "vi"}}Google OAuth token thủ công{{else}}Manual Google OAuth token{{end}}</small></button>
+      </div>
     </div>
   </div>
 </section>
@@ -37,7 +49,7 @@
 {{range .ProviderGroups}}
 <section class="provider-section provider-catalog-section" data-provider-group="{{.Key}}">
   <div class="section-title-row provider-group-header">
-    <div><h2>{{.Title}}</h2><p>{{.Subtitle}}</p></div>
+    <div><h2>{{.Title}}</h2><p>{{if eq $.Lang "vi"}}{{if eq .Key "oauth"}}Tài khoản đăng nhập qua OAuth/local token như Codex CLI.{{else if eq .Key "apikey"}}Provider OpenAI-compatible hoặc endpoint tùy chỉnh dùng API key.{{else}}Provider khác hoặc cấu hình thử nghiệm.{{end}}{{else}}{{.Subtitle}}{{end}}</p></div>
     <div class="provider-group-actions"><span class="pill">{{len .Cards}} {{if eq $.Lang "vi"}}provider{{else}}providers{{end}}</span></div>
   </div>
   <div class="provider-catalog-grid">

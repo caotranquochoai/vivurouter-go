@@ -7,9 +7,11 @@ import (
 )
 
 type resolvedModel struct {
-	Provider store.Provider
-	Model    string
-	IsCodex  bool
+	Provider  store.Provider
+	Model     string
+	IsCodex   bool
+	AccountID string
+	Account   string
 }
 
 func resolveModel(model string, settings store.Settings, providers []store.Provider) (resolvedModel, bool) {
