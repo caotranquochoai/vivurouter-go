@@ -5,18 +5,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Title}} · {{tr .T "app.name"}}</title>
-  <link rel="stylesheet" href="/static/app.css?v=20260611">
-  <link rel="stylesheet" href="/static/provider-actions.css?v=20260611">
+  <link rel="stylesheet" href="/static/tokens.css?v=20260704-redesign1">
+  <link rel="stylesheet" href="/static/app.css?v=20260704-redesign1">
+  <link rel="stylesheet" href="/static/provider-actions.css?v=20260704-redesign1">
 </head>
 <body>
-<main class="container">
-  <section class="panel settings-card admin-login-card">
-    <p class="eyebrow">Admin security</p>
-    <h1>{{tr .T "login.title"}}</h1>
+<main class="login-viewport">
+  <section class="panel admin-login-card">
+    <div class="login-brand">
+      <span class="brand-mark">VR</span>
+      <div>
+        <p class="eyebrow">{{tr .T "app.name"}}</p>
+        <h1>{{tr .T "login.title"}}</h1>
+      </div>
+    </div>
     <p class="muted-text">{{tr .T "login.subtitle"}}</p>
-    {{if .Error}}<div class="provider-warning provider-warning-danger">{{.Error}}</div>{{end}}
+    {{if .Error}}<div class="error-text">{{.Error}}</div>{{end}}
     <form method="post" class="form-grid">
-      <label class="wide">{{tr .T "login.passcode"}}<input name="passcode" type="password" autofocus required></label>
+      <label class="wide">{{tr .T "login.passcode"}}
+        <input name="passcode" type="password" autofocus required autocomplete="current-password">
+      </label>
       <div class="form-actions wide"><button type="submit">{{tr .T "login.submit"}}</button></div>
     </form>
   </section>

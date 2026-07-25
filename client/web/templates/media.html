@@ -1,0 +1,66 @@
+{{template "layout_start" .}}
+<section class="media-hero">
+  <div><p class="eyebrow">OpenAI Media API</p><h1>Media Studio</h1><p>{{if eq .Lang "vi"}}Tạo ảnh, chỉnh sửa ảnh, chuyển văn bản thành giọng nói và phiên âm trực tiếp qua provider đã cấu hình.{{else}}Generate and edit images, synthesize speech, and transcribe audio through configured providers.{{end}}</p></div>
+  <div class="media-security-note"><span>●</span><div><strong>{{if eq .Lang "vi"}}Credential được giữ phía server{{else}}Server-side credentials{{end}}</strong><small>{{if eq .Lang "vi"}}Trình duyệt không nhận API key của provider.{{else}}Provider API keys are never sent to the browser.{{end}}</small></div></div>
+</section>
+
+<section class="media-studio" data-media-studio data-lang="{{.Lang}}">
+  <div class="media-tabs" role="tablist" aria-label="Media operations">
+    <button type="button" class="media-tab is-active" data-media-tab="image" role="tab" aria-selected="true">▧ {{if eq .Lang "vi"}}Tạo ảnh{{else}}Generate Image{{end}}</button>
+    <button type="button" class="media-tab" data-media-tab="image-edit" role="tab" aria-selected="false">◫ {{if eq .Lang "vi"}}Sửa ảnh{{else}}Edit Image{{end}}</button>
+    <button type="button" class="media-tab" data-media-tab="tts" role="tab" aria-selected="false">◖ {{if eq .Lang "vi"}}Văn bản → giọng nói{{else}}Text to Speech{{end}}</button>
+    <button type="button" class="media-tab" data-media-tab="stt" role="tab" aria-selected="false">◉ {{if eq .Lang "vi"}}Giọng nói → văn bản{{else}}Speech to Text{{end}}</button>
+    <button type="button" class="media-tab" disabled title="Video job API is not available yet">▷ Video <span class="badge badge-info">Soon</span></button>
+  </div>
+
+  <div class="media-workspace">
+    <form class="media-controls" data-media-form>
+      <div class="media-form-grid">
+        <label>{{if eq .Lang "vi"}}Provider{{else}}Provider{{end}}
+          <select name="provider" required>
+            <option value="">-- {{if eq .Lang "vi"}}Chọn provider{{else}}Select provider{{end}} --</option>
+            {{range .Providers}}{{if and .Enabled (or (eq .Type "openai-compatible") (eq .Type "codex"))}}<option value="{{.ID}}" data-provider-type="{{.Type}}">{{.Name}} ({{.ID}}){{if eq .Type "codex"}} · OAuth Image{{end}}</option>{{end}}{{end}}
+          </select>
+        </label>
+        <label>Model
+          <select name="model_select"><option value="">-- {{if eq .Lang "vi"}}Chọn hoặc nhập model{{else}}Select or enter model{{end}} --</option>{{range .Providers}}{{if and .Enabled (eq .Type "openai-compatible")}}{{$providerID := .ID}}{{range .Models}}<option value="{{.}}" data-provider="{{$providerID}}" data-operation="all">{{.}}</option>{{end}}{{end}}{{if and .Enabled (eq .Type "codex")}}<option value="gpt-5.5-image" data-provider="{{.ID}}" data-operation="image">gpt-5.5-image</option><option value="gpt-5.4-image" data-provider="{{.ID}}" data-operation="image">gpt-5.4-image</option><option value="gpt-5.3-image" data-provider="{{.ID}}" data-operation="image">gpt-5.3-image</option>{{end}}{{end}}</select>
+          <input name="model" placeholder="gpt-image-1 / gpt-4o-mini-tts / whisper-1" required>
+        </label>
+      </div>
+
+      <div data-media-panel="image">
+        <label>{{if eq .Lang "vi"}}Mô tả ảnh{{else}}Image prompt{{end}}<textarea name="image_prompt" rows="6" placeholder="{{if eq .Lang "vi"}}Mô tả chi tiết ảnh muốn tạo...{{else}}Describe the image to generate...{{end}}"></textarea></label>
+        <div class="media-form-grid media-options"><label>Size<select name="image_size"><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option><option>auto</option></select></label><label>Quality<select name="image_quality"><option>auto</option><option>low</option><option>medium</option><option>high</option></select></label><label>Format<select name="image_format"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp">WebP</option></select></label></div>
+      </div>
+
+      <div data-media-panel="image-edit" hidden>
+        <label>{{if eq .Lang "vi"}}Yêu cầu chỉnh sửa{{else}}Edit prompt{{end}}<textarea name="edit_prompt" rows="4" placeholder="{{if eq .Lang "vi"}}Mô tả thay đổi cần thực hiện...{{else}}Describe the desired edit...{{end}}"></textarea></label>
+        <div class="media-upload-grid"><label class="media-dropzone">▧ <strong>{{if eq .Lang "vi"}}Ảnh nguồn{{else}}Source image{{end}}</strong><small>PNG/JPEG/WebP</small><input type="file" name="image_file" accept="image/png,image/jpeg,image/webp"></label><label class="media-dropzone">◩ <strong>Mask (optional)</strong><small>PNG</small><input type="file" name="mask_file" accept="image/png"></label></div>
+        <div class="media-input-previews"><img data-media-input-preview="image" alt="" hidden><img data-media-input-preview="mask" alt="" hidden></div>
+      </div>
+
+      <div data-media-panel="tts" hidden>
+        <label>{{if eq .Lang "vi"}}Nội dung đọc{{else}}Speech input{{end}}<textarea name="tts_input" rows="7" placeholder="{{if eq .Lang "vi"}}Nhập văn bản cần chuyển thành giọng nói...{{else}}Enter text to synthesize...{{end}}"></textarea></label>
+        <div class="media-form-grid media-options"><label>Voice<input name="tts_voice" value="alloy"></label><label>Format<select name="tts_format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="opus">Opus</option><option value="aac">AAC</option><option value="flac">FLAC</option></select></label><label>Speed<input type="number" name="tts_speed" value="1" min="0.25" max="4" step="0.05"></label></div>
+      </div>
+
+      <div data-media-panel="stt" hidden>
+        <label class="media-dropzone media-dropzone-wide">◉ <strong>{{if eq .Lang "vi"}}Tệp âm thanh{{else}}Audio file{{end}}</strong><small>MP3, WAV, M4A, WebM, FLAC</small><input type="file" name="audio_file" accept="audio/*"></label>
+        <audio data-media-input-audio controls hidden></audio>
+        <div class="media-form-grid media-options"><label>{{if eq .Lang "vi"}}Ngôn ngữ{{else}}Language{{end}}<input name="stt_language" placeholder="vi / en (optional)"></label><label>Response<select name="stt_format"><option value="json">JSON</option><option value="verbose_json">Verbose JSON</option><option value="text">Text</option><option value="srt">SRT</option><option value="vtt">VTT</option></select></label></div>
+        <label>{{if eq .Lang "vi"}}Gợi ý phiên âm{{else}}Transcription prompt{{end}}<textarea name="stt_prompt" rows="3" placeholder="Optional context or vocabulary"></textarea></label>
+      </div>
+
+      <div class="media-actions"><button type="submit" class="btn-primary" data-media-run>▶ {{if eq .Lang "vi"}}Chạy tạo media{{else}}Run media request{{end}}</button><button type="button" class="btn-secondary" data-media-cancel disabled>{{if eq .Lang "vi"}}Hủy{{else}}Cancel{{end}}</button><span class="media-status" data-media-status>{{if eq .Lang "vi"}}Sẵn sàng{{else}}Ready{{end}}</span></div>
+    </form>
+
+    <aside class="media-result" aria-live="polite">
+      <div class="media-result-head"><div><p class="eyebrow">Output</p><h2>{{if eq .Lang "vi"}}Kết quả{{else}}Result{{end}}</h2></div><button type="button" class="btn-secondary" data-media-download hidden>{{if eq .Lang "vi"}}Tải xuống{{else}}Download{{end}}</button></div>
+      <div class="media-empty" data-media-empty><span>◇</span><p>{{if eq .Lang "vi"}}Kết quả hình ảnh, âm thanh hoặc phiên âm sẽ xuất hiện tại đây.{{else}}Generated images, audio, or transcripts will appear here.{{end}}</p></div>
+      <div class="media-error" data-media-error hidden></div>
+      <div class="media-output" data-media-output hidden><img data-media-image alt="Generated media" hidden><audio data-media-audio controls hidden></audio><pre data-media-text hidden></pre><div class="media-meta" data-media-meta></div></div>
+    </aside>
+  </div>
+</section>
+<script src="/static/media.js?v=20260715-media-studio1"></script>
+{{template "layout_end" .}}

@@ -61,16 +61,42 @@
     <article class="provider-detail-card provider-runtime-error"><span>{{if eq $.Lang "vi"}}Lỗi gần nhất{{else}}Last error{{end}}</span>{{if .LastError}}<code title="{{.LastError}}">{{.LastError}}</code>{{else}}<strong class="muted-text">{{if eq $.Lang "vi"}}không có{{else}}none{{end}}</strong>{{end}}</article>
   </div>
 
+  {{if or (eq .Type "codex") (eq .Type "antigravity")}}
+  <section class="provider-detail-section provider-auth-reconnect-panel">
+    <div class="section-title-row compact provider-detail-subhead">
+      <div><p class="eyebrow">{{if eq $.Lang "vi"}}Kết nối OAuth/token{{else}}OAuth/token connection{{end}}</p><h2>{{if eq $.Lang "vi"}}Kết nối credential mặc định{{else}}Connect default credential{{end}}</h2><p>{{if eq $.Lang "vi"}}Credential này là fallback khi Account Pool chưa có tài khoản khả dụng. Tạo account OAuth trong Account Pool để quản lý nhiều tài khoản, proxy và cooldown riêng.{{else}}This credential is the fallback when Account Pool has no eligible account. Create OAuth accounts in Account Pool to manage multiple accounts, proxies, and independent cooldowns.{{end}}</p></div>
+    </div>
+    <div class="form-actions provider-auth-actions">
+      {{if eq .Type "codex"}}
+      <form method="post" action="/api/codex/oauth/start"><input type="hidden" name="provider_id" value="{{.ID}}"><input type="hidden" name="proxy_url" value="{{.ProxyURL}}"><button type="submit" class="btn-secondary">{{if eq $.Lang "vi"}}Kết nối lại Codex OAuth{{else}}Reconnect Codex OAuth{{end}}</button></form>
+      {{end}}
+      {{if eq .Type "antigravity"}}
+      <form method="post" action="/api/antigravity/oauth/start"><input type="hidden" name="provider_id" value="{{.ID}}"><input type="hidden" name="proxy_url" value="{{.ProxyURL}}"><button type="submit" class="btn-secondary">{{if eq $.Lang "vi"}}Kết nối lại Antigravity OAuth{{else}}Reconnect Antigravity OAuth{{end}}</button></form>
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+
   <section class="provider-detail-section">
     <div class="section-title-row compact provider-detail-subhead">
       <div><p class="eyebrow">{{if eq $.Lang "vi"}}Model đã lưu{{else}}Saved models{{end}}</p><h2>{{if eq $.Lang "vi"}}Danh sách model{{else}}Model list{{end}}</h2></div>
       <input class="combo-model-search provider-detail-model-filter" type="search" placeholder="{{if eq $.Lang "vi"}}Lọc model...{{else}}Filter models...{{end}}">
     </div>
-    <div class="model-chip-list provider-model-list provider-detail-model-list is-collapsed" data-provider-model-list="{{.ID}}">
-      {{range .VisibleModels}}<span class="model-chip model-chip-action" data-model-chip="{{.Name}}" title="{{.Name}}"><code title="{{.Name}}">{{.Name}}</code><span class="model-usage-badge" title="{{fmtTokens .Tokens}} tokens · {{.Requests}} requests in {{$.SelectedProvider.UsagePeriodLabel}}">{{if .HasUsage}}{{fmtTokensShort .Tokens}}{{else}}0{{end}}</span><button type="button" class="chip-test-btn js-test-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}" title="{{.Name}}">{{tr $.T "providers.test"}}</button><span class="model-test-result" aria-live="polite"></span></span>{{else}}<span class="muted-text">{{tr $.T "providers.no_model"}}</span>{{end}}
-      {{range .HiddenModels}}<span class="model-chip model-chip-action provider-model-extra" data-model-chip="{{.Name}}" title="{{.Name}}" hidden><code title="{{.Name}}">{{.Name}}</code><span class="model-usage-badge" title="{{fmtTokens .Tokens}} tokens · {{.Requests}} requests in {{$.SelectedProvider.UsagePeriodLabel}}">{{if .HasUsage}}{{fmtTokensShort .Tokens}}{{else}}0{{end}}</span><button type="button" class="chip-test-btn js-test-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}" title="{{.Name}}">{{tr $.T "providers.test"}}</button><span class="model-test-result" aria-live="polite"></span></span>{{end}}
+    <div class="provider-model-scroll {{if gt .ExtraModelCount 0}}is-collapsed{{end}}" data-provider-model-scroll>
+    <div class="model-chip-list provider-model-list provider-detail-model-list" data-provider-model-list="{{.ID}}">
+      {{range .VisibleModels}}<span class="model-chip model-chip-action" data-model-chip="{{.Name}}" title="{{.Name}}"><code title="{{.Name}}">{{.Name}}</code><span class="model-usage-badge" title="{{fmtTokens .Tokens}} tokens · {{.Requests}} requests in {{$.SelectedProvider.UsagePeriodLabel}}">{{if .HasUsage}}{{fmtTokensShort .Tokens}}{{else}}0{{end}}</span><button type="button" class="chip-test-btn js-test-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}" title="{{.Name}}">{{tr $.T "providers.test"}}</button><button type="button" class="chip-test-btn js-hide-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}" title="{{if eq $.Lang "vi"}}Ẩn model{{else}}Hide model{{end}}">{{if eq $.Lang "vi"}}Ẩn{{else}}Hide{{end}}</button><span class="model-test-result" aria-live="polite"></span></span>{{else}}<span class="muted-text">{{tr $.T "providers.no_model"}}</span>{{end}}
+      {{range .ExtraModels}}<span class="model-chip model-chip-action provider-model-extra" data-model-chip="{{.Name}}" title="{{.Name}}" hidden><code title="{{.Name}}">{{.Name}}</code><span class="model-usage-badge">{{if .HasUsage}}{{fmtTokensShort .Tokens}}{{else}}0{{end}}</span><button type="button" class="chip-test-btn js-test-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}">{{tr $.T "providers.test"}}</button><button type="button" class="chip-test-btn js-hide-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}">{{if eq $.Lang "vi"}}Ẩn{{else}}Hide{{end}}</button><span class="model-test-result" aria-live="polite"></span></span>{{end}}
     </div>
-    {{if gt .HiddenModelCount 0}}<button type="button" class="btn-secondary provider-model-toggle provider-detail-model-toggle js-expand-provider-models" data-hidden-count="{{.HiddenModelCount}}">{{if eq $.Lang "vi"}}Hiện thêm {{.HiddenModelCount}} model{{else}}Show {{.HiddenModelCount}} more models{{end}}</button>{{end}}
+    </div>
+    {{if gt .ExtraModelCount 0}}<button type="button" class="btn-secondary provider-model-toggle provider-detail-model-toggle js-expand-provider-models" data-hidden-count="{{.ExtraModelCount}}">{{if eq $.Lang "vi"}}Hiện thêm {{.ExtraModelCount}} model{{else}}Show {{.ExtraModelCount}} more models{{end}}</button>{{end}}
+    {{if .HiddenModels}}
+    <div class="provider-hidden-models">
+      <p class="eyebrow">{{if eq $.Lang "vi"}}Model đã ẩn{{else}}Hidden models{{end}}</p>
+      <div class="model-chip-list provider-detail-model-list">
+        {{range .HiddenModels}}<span class="model-chip model-chip-action provider-model-hidden" data-model-chip="{{.Name}}" title="{{.Name}}"><code title="{{.Name}}">{{.Name}}</code><span class="model-usage-badge">{{if .HasUsage}}{{fmtTokensShort .Tokens}}{{else}}0{{end}}</span><button type="button" class="chip-test-btn js-test-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}">{{tr $.T "providers.test"}}</button><button type="button" class="chip-test-btn js-unhide-model" data-provider-id="{{$.SelectedProvider.ID}}" data-model="{{.Name}}">{{if eq $.Lang "vi"}}Hiện{{else}}Show{{end}}</button><span class="model-test-result" aria-live="polite"></span></span>{{end}}
+      </div>
+    </div>
+    {{end}}
     <form method="post" class="provider-custom-model-form">
       <input type="hidden" name="action" value="add-models">
       <input type="hidden" name="id" value="{{.ID}}">
@@ -81,6 +107,40 @@
     <div class="provider-action-result" data-provider-result="{{.ID}}" aria-live="polite"></div>
   </section>
 
+  {{if or (eq .Type "codex") (eq .Type "antigravity")}}
+  <section class="provider-detail-section provider-account-pool-section" data-provider-account-pool data-provider-id="{{.ID}}" data-provider-type="{{.Type}}">
+    <div class="section-title-row compact provider-detail-subhead provider-account-pool-head">
+      <div>
+        <p class="eyebrow">{{if eq $.Lang "vi"}}Tài khoản upstream{{else}}Upstream accounts{{end}}</p>
+        <h2>{{if eq $.Lang "vi"}}Quản lý tài khoản{{else}}Account management{{end}} <span class="provider-account-count" aria-live="polite">0</span></h2>
+        <p class="muted-text">{{if eq $.Lang "vi"}}Mỗi tài khoản có credential, proxy, độ ưu tiên và cooldown riêng. Credential chỉ ghi một chiều và không hiển thị lại.{{else}}Each account has independent credentials, proxy, priority, and cooldown. Credentials are write-only and never shown again.{{end}}</p>
+      </div>
+      <div class="provider-account-toolbar">
+        <button type="button" class="btn-secondary js-refresh-provider-accounts">↻ {{if eq $.Lang "vi"}}Làm mới{{else}}Refresh{{end}}</button>
+        <button type="button" class="btn-secondary js-export-provider-accounts" data-open-modal="provider-account-export-modal">{{if eq $.Lang "vi"}}Xuất backup{{else}}Export backup{{end}}</button>
+        <button type="button" class="btn-secondary" data-open-modal="provider-account-import-modal">{{if eq $.Lang "vi"}}Nhập backup{{else}}Import backup{{end}}</button>
+        <button type="button" class="provider-add-btn js-add-provider-account" data-open-modal="provider-account-modal">+ {{if eq $.Lang "vi"}}Thêm tài khoản{{else}}Add account{{end}}</button>
+      </div>
+    </div>
+    <div class="provider-account-list" aria-live="polite">
+      <article class="provider-account-card provider-account-default {{if not .Enabled}}is-disabled{{end}}" data-provider-default-account>
+        <div class="provider-account-identity">
+          <span class="provider-account-status {{if and .Enabled .HasCredential}}is-active{{end}}"></span>
+          <div><strong>{{if eq $.Lang "vi"}}Tài khoản mặc định{{else}}Default account{{end}}</strong><small>{{.ID}} · {{if .Enabled}}{{if eq $.Lang "vi"}}Đang hoạt động{{else}}Active{{end}}{{else}}{{if eq $.Lang "vi"}}Đã tắt{{else}}Disabled{{end}}{{end}}</small></div>
+        </div>
+        <div class="provider-account-meta"><span class="badge badge-info">OAuth</span><span class="badge badge-ok">{{if eq $.Lang "vi"}}Mặc định{{else}}Default{{end}}</span><span>{{if .ProxyID}}{{if eq $.Lang "vi"}}Proxy pool{{else}}Proxy pool{{end}}: {{.ProxyID}}{{else if .ProxyURL}}{{if eq $.Lang "vi"}}Proxy riêng{{else}}Custom proxy{{end}}{{else}}{{if eq $.Lang "vi"}}Kết nối trực tiếp{{else}}Direct route{{end}}{{end}}</span></div>
+        <div class="provider-account-health {{if .Cooldown}}is-cooldown{{end}}">{{if .Cooldown}}{{if eq $.Lang "vi"}}Cooldown còn {{.CooldownRemaining}}{{else}}Cooldown for {{.CooldownRemaining}}{{end}}{{else if .HasCredential}}{{if eq $.Lang "vi"}}Credential đã kết nối{{else}}Credential connected{{end}}{{else}}{{if eq $.Lang "vi"}}Chưa có credential{{else}}Credential missing{{end}}{{end}}</div>
+        <div class="provider-account-actions">
+          {{if eq .Type "codex"}}<form method="post" action="/api/codex/oauth/start"><input type="hidden" name="provider_id" value="{{.ID}}"><input type="hidden" name="proxy_url" value="{{.ProxyURL}}"><button type="submit" class="btn-secondary btn-sm">{{if eq $.Lang "vi"}}Kết nối lại{{else}}Reconnect{{end}}</button></form>{{end}}
+          {{if eq .Type "antigravity"}}<form method="post" action="/api/antigravity/oauth/start"><input type="hidden" name="provider_id" value="{{.ID}}"><input type="hidden" name="proxy_url" value="{{.ProxyURL}}"><button type="submit" class="btn-secondary btn-sm">{{if eq $.Lang "vi"}}Kết nối lại{{else}}Reconnect{{end}}</button></form>{{end}}
+        </div>
+      </article>
+      <div data-managed-provider-accounts>{{if eq $.Lang "vi"}}Đang tải tài khoản…{{else}}Loading accounts…{{end}}</div>
+    </div>
+  </section>
+  {{end}}
+
+  {{if eq .Type "openai-compatible"}}
   <section class="provider-detail-section">
     <div class="section-title-row compact provider-detail-subhead">
       <div>
@@ -88,8 +148,12 @@
         <h2>{{if eq $.Lang "vi"}}Danh sách khóa API{{else}}API Key List{{end}}</h2>
       </div>
       <div class="form-actions">
+        {{if eq .Type "openai-compatible"}}
         <button type="button" class="btn-secondary js-btn-add-key" data-open-modal="add-key-modal">{{if eq $.Lang "vi"}}+ Thêm key{{else}}+ Add key{{end}}</button>
         <button type="button" class="btn-secondary" data-open-modal="bulk-keys-modal">{{if eq $.Lang "vi"}}+ Thêm hàng loạt{{else}}+ Bulk add{{end}}</button>
+        {{else}}
+        <span class="muted-text">{{if eq $.Lang "vi"}}Provider OAuth/token không dùng key pool. Dùng nút kết nối lại token phía trên.{{else}}OAuth/token providers do not use the key pool. Use reconnect token above.{{end}}</span>
+        {{end}}
       </div>
     </div>
 
@@ -155,10 +219,15 @@
       <p class="muted-text keys-empty-text">{{if eq $.Lang "vi"}}Chưa có key nào trong pool. Sẽ tự dùng API Key mặc định của Provider ở trên.{{else}}No keys in pool yet. Will fallback to the provider's default API Key above.{{end}}</p>
     {{end}}
   </section>
+  {{end}}
 
   <div class="provider-card-actions provider-detail-actions">
+    <a class="btn-secondary" href="/api/provider/export?id={{.ID}}">{{if eq $.Lang "vi"}}Xuất JSON{{else}}Export JSON{{end}}</a>
+    <form class="inline-form" method="post" action="/api/provider/import" enctype="multipart/form-data">
+      <label class="btn-secondary provider-import-btn">{{if eq $.Lang "vi"}}Nhập JSON{{else}}Import JSON{{end}}<input name="provider_file" type="file" accept="application/json,.json" onchange="this.form.submit()" hidden></label>
+    </form>
     <button type="button" class="btn-secondary js-fetch-models" data-provider-id="{{.ID}}">{{tr $.T "providers.fetch_models"}}</button>
-    {{if eq .Type "codex"}}<button type="button" class="btn-secondary js-refresh-codex-quota" data-provider-id="{{.ID}}">{{tr $.T "providers.quota"}}</button>{{end}}
+    {{if eq .Type "codex"}}<button type="button" class="btn-secondary js-refresh-codex-quota" data-provider-id="{{.ID}}">{{tr $.T "providers.quota"}}</button><button type="button" class="btn-secondary js-codex-reset" data-provider-id="{{.ID}}" data-account-label="{{if eq $.Lang "vi"}}Tài khoản mặc định{{else}}Default account{{end}}" data-credit-count="0" disabled>Codex Reset</button><button type="button" class="btn-secondary js-codex-credit-expiry" data-provider-id="{{.ID}}" data-account-label="{{if eq $.Lang "vi"}}Tài khoản mặc định{{else}}Default account{{end}}">{{if eq $.Lang "vi"}}Hạn credit{{else}}Credit Expiry{{end}}</button>{{end}}
     {{if eq .Type "antigravity"}}<button type="button" class="btn-secondary js-refresh-antigravity-quota" data-provider-id="{{.ID}}">{{tr $.T "providers.quota"}}</button>{{end}}
     <a class="btn-secondary" href="/providers/{{.ID}}?edit=1">{{tr $.T "common.edit"}}</a>
     <form method="post" class="inline-form" onsubmit="return confirm(this.dataset.confirmMessage);" data-confirm-message="{{if eq $.Lang `vi`}}Xóa provider {{.ID}}? Hành động này không thể hoàn tác.{{else}}Delete provider {{.ID}}? This cannot be undone.{{end}}"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" class="btn-danger">{{tr $.T "common.delete"}}</button></form>
@@ -166,6 +235,109 @@
 </section>
 {{else}}
 <section class="empty-state"><h2>{{tr .T "providers.no_provider"}}</h2><p>{{if eq .Lang "vi"}}Provider không tồn tại hoặc đã bị xóa.{{else}}Provider does not exist or was deleted.{{end}}</p><a class="btn-secondary" href="/providers">← {{if eq .Lang "vi"}}Tất cả providers{{else}}All providers{{end}}</a></section>
+{{end}}
+
+{{with .SelectedProvider}}
+{{if or (eq .Type "codex") (eq .Type "antigravity")}}
+<div class="provider-modal" id="provider-account-export-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="provider-account-export-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head"><div><p class="eyebrow">{{if eq $.Lang "vi"}}Backup tài khoản{{else}}Account backup{{end}}</p><h2 id="provider-account-export-title">{{if eq $.Lang "vi"}}Xuất Account Pool{{else}}Export Account Pool{{end}}</h2></div><button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr $.T "common.close"}}">×</button></div>
+    <form class="provider-form-grid" data-provider-account-export-form data-provider-id="{{.ID}}">
+      <label>{{if eq $.Lang "vi"}}Phạm vi{{else}}Scope{{end}}<select name="scope"><option value="selected">{{if eq $.Lang "vi"}}Tài khoản đã chọn{{else}}Selected accounts{{end}}</option><option value="pool">{{if eq $.Lang "vi"}}Toàn bộ Account Pool{{else}}Entire Account Pool{{end}}</option></select></label>
+      <label>{{if eq $.Lang "vi"}}Định dạng{{else}}Format{{end}}<select name="format" data-account-backup-format><option value="encrypted">{{if eq $.Lang "vi"}}Backup mã hóa (khuyến nghị){{else}}Encrypted backup (recommended){{end}}</option><option value="json">{{if eq $.Lang "vi"}}JSON tương thích — không mã hóa{{else}}Compatible JSON — unencrypted{{end}}</option></select></label>
+      <div class="wide" data-account-backup-encrypted-fields><label>{{if eq $.Lang "vi"}}Passphrase{{else}}Passphrase{{end}}<input name="passphrase" type="password" autocomplete="new-password"></label><label>{{if eq $.Lang "vi"}}Xác nhận passphrase{{else}}Confirm passphrase{{end}}<input name="passphrase_confirm" type="password" autocomplete="new-password"></label></div>
+      <label class="checkbox wide provider-warning" data-account-backup-plaintext-warning hidden><input name="confirm_plaintext" type="checkbox"> {{if eq $.Lang "vi"}}Tôi hiểu JSON này không được mã hóa và chứa API key, access token, refresh token và có thể gồm proxy credential. Không gửi qua chat, Git hoặc nơi chia sẻ công khai.{{else}}I understand this JSON is unencrypted and contains API keys, access tokens, refresh tokens, and possibly proxy credentials. Do not send it through chat, Git, or public sharing.{{end}}</label>
+      <div class="form-actions wide"><button type="submit" data-account-backup-export-submit>{{if eq $.Lang "vi"}}Tải backup{{else}}Download backup{{end}}</button><button type="button" class="btn-secondary" data-close-modal>{{tr $.T "common.cancel"}}</button></div>
+      <div class="wide provider-result" data-account-backup-export-result aria-live="polite"></div>
+    </form>
+  </article>
+</div>
+
+<div class="provider-modal" id="provider-account-import-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="provider-account-import-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head"><div><p class="eyebrow">{{if eq $.Lang "vi"}}Khôi phục tài khoản{{else}}Restore accounts{{end}}</p><h2 id="provider-account-import-title">{{if eq $.Lang "vi"}}Nhập backup Account Pool{{else}}Import Account Pool backup{{end}}</h2></div><button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr $.T "common.close"}}">×</button></div>
+    <form class="provider-form-grid" data-provider-account-import-form data-provider-id="{{.ID}}"><label class="wide">{{if eq $.Lang "vi"}}File backup{{else}}Backup file{{end}}<input name="file" type="file" accept="application/json,.json,.vrbackup" required></label><label>{{if eq $.Lang "vi"}}Passphrase (chỉ backup mã hóa){{else}}Passphrase (encrypted backups only){{end}}<input name="passphrase" type="password" autocomplete="current-password"></label><label>{{if eq $.Lang "vi"}}Xử lý trùng ID{{else}}Conflict policy{{end}}<select name="policy"><option value="skip">Skip</option><option value="replace">Replace</option></select></label><label class="checkbox wide provider-warning"><input name="confirm_plaintext" type="checkbox"> {{if eq $.Lang "vi"}}Tôi xác nhận đây có thể là JSON plaintext chứa credential.{{else}}I confirm this may be plaintext JSON containing credentials.{{end}}</label><label class="wide" data-account-backup-replace-confirm hidden>{{if eq $.Lang "vi"}}Gõ REPLACE để ghi đè{{else}}Type REPLACE to overwrite{{end}}<input name="confirm" autocomplete="off"></label><div class="form-actions wide"><button type="button" class="btn-secondary js-preview-account-backup">{{if eq $.Lang "vi"}}Xem trước{{else}}Preview{{end}}</button><button type="submit">{{if eq $.Lang "vi"}}Nhập backup{{else}}Import backup{{end}}</button><button type="button" class="btn-secondary" data-close-modal>{{tr $.T "common.cancel"}}</button></div><div class="wide provider-result" data-account-backup-import-result aria-live="polite"></div></form>
+  </article>
+</div>
+{{end}}
+{{end}}
+
+{{with .SelectedProvider}}
+{{if eq .Type "codex"}}
+<div class="provider-modal" id="codex-reset-credits-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="codex-reset-credits-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide codex-reset-modal-card">
+    <div class="provider-modal-head"><div><p class="eyebrow">Codex Reset</p><h2 id="codex-reset-credits-title">Codex Reset Credit Expiry</h2><small data-codex-reset-account-label></small></div><button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr $.T "common.close"}}">×</button></div>
+    <div class="codex-reset-summary" data-codex-reset-summary aria-live="polite"></div>
+    <div class="codex-reset-table-wrap"><table class="codex-reset-table"><thead><tr><th>{{if eq $.Lang "vi"}}Trạng thái{{else}}Status{{end}}</th><th>{{if eq $.Lang "vi"}}Ngày cấp{{else}}Granted{{end}}</th><th>{{if eq $.Lang "vi"}}Hết hạn{{else}}Expires{{end}}</th><th>{{if eq $.Lang "vi"}}Còn lại{{else}}Remaining{{end}}</th></tr></thead><tbody data-codex-reset-credits-body></tbody></table></div>
+    <div class="form-actions"><button type="button" class="btn-secondary" data-close-modal>{{tr $.T "common.close"}}</button></div>
+  </article>
+</div>
+{{end}}
+{{end}}
+
+{{with .SelectedProvider}}
+{{if or (eq .Type "codex") (eq .Type "antigravity")}}
+<div class="provider-modal" id="provider-account-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="provider-account-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <article class="provider-modal-card provider-modal-wide">
+    <div class="provider-modal-head">
+      <div><p class="eyebrow">{{if eq $.Lang "vi"}}Tài khoản upstream{{else}}Upstream account{{end}}</p><h2 id="provider-account-modal-title">{{if eq $.Lang "vi"}}Thêm tài khoản{{else}}Add account{{end}}</h2></div>
+      <button type="button" class="provider-modal-close" data-close-modal aria-label="{{tr $.T "common.close"}}">×</button>
+    </div>
+    <form class="provider-form-grid" data-provider-account-form data-provider-id="{{.ID}}">
+      <input name="id" type="hidden">
+      <label>{{if eq $.Lang "vi"}}Tên tài khoản{{else}}Account label{{end}}<input name="name" required placeholder="personal-main, work-backup"></label>
+      <label>{{if eq $.Lang "vi"}}Loại xác thực{{else}}Auth type{{end}}
+        <select name="auth_type" data-account-auth-type>
+          {{if eq .Type "openai-compatible"}}<option value="api_key">API key</option><option value="bearer">Bearer token</option>{{end}}
+          {{if or (eq .Type "codex") (eq .Type "antigravity")}}<option value="oauth">OAuth tokens</option>{{end}}
+          {{if or (eq .Type "mimo-free") (eq .Type "opencode")}}<option value="none">No auth</option>{{end}}
+        </select>
+      </label>
+      {{if eq .Type "openai-compatible"}}
+      <label class="wide" data-account-api-key-field>API Key<input name="api_key" type="password" placeholder="sk-..."></label>
+      <label class="wide" data-account-bearer-field hidden>Bearer Token<input name="access_token" type="password" placeholder="Bearer token"></label>
+      {{end}}
+      {{if or (eq .Type "codex") (eq .Type "antigravity")}}
+      <label>Access Token<input name="access_token" type="password" placeholder="OAuth access token"></label>
+      <label>Refresh Token<input name="refresh_token" type="password" placeholder="OAuth refresh token"></label>
+      <p class="wide muted-text">{{if eq $.Lang "vi"}}Dán token OAuth hiện có hoặc lưu account rồi dùng nút Connect OAuth trong Account Pool để liên kết OAuth riêng cho account đó.{{else}}Paste existing OAuth tokens, or save the account and use its Connect OAuth button in Account Pool to link OAuth specifically to that account.{{end}}</p>
+      {{end}}
+      {{if eq .Type "opencode"}}
+      <label class="wide">Bearer Token<input name="access_token" type="password" placeholder="Optional bearer token"></label>
+      {{end}}
+      <label>{{if eq $.Lang "vi"}}Độ ưu tiên{{else}}Priority{{end}}<input name="priority" type="number" min="1" value="1"></label>
+      {{if eq .Type "codex"}}<label>{{if eq $.Lang "vi"}}Giới hạn quota (%){{else}}Quota limit (%){{end}}<input name="quota_limit_percent" type="number" min="0" max="100" step="1" value="0"></label><p class="wide muted-text">{{if eq $.Lang "vi"}}0 = tắt. Account sẽ không nhận tác vụ mới khi Session hoặc Weekly chạm ngưỡng; tác vụ đang chạy không bị chuyển account.{{else}}0 = disabled. The account stops receiving new tasks when Session or Weekly reaches the limit; running tasks are never moved to another account.{{end}}</p>{{end}}
+      <label>Proxy Pool
+        <select name="proxy_id"><option value="">-- {{if eq $.Lang "vi"}}Không dùng / Custom URL{{else}}None / Custom URL{{end}} --</option>{{range $.Proxies}}<option value="{{.ID}}">{{.Name}} ({{.ID}})</option>{{end}}</select>
+      </label>
+      <label>Proxy URL (Custom)<input name="proxy_url" placeholder="http://user:pass@host:port"></label>
+      <label class="checkbox wide"><input name="enabled" type="checkbox" checked> {{if eq $.Lang "vi"}}Đang bật{{else}}Enabled{{end}}</label>
+      <p class="wide muted-text">{{if eq $.Lang "vi"}}Chọn Proxy Pool hoặc nhập Custom Proxy URL. Proxy Pool được ưu tiên khi cả hai cùng có giá trị.{{else}}Choose a Proxy Pool or enter a custom proxy URL. The pool wins when both are set.{{end}}</p>
+      {{if eq .Type "codex"}}
+      <section class="wide oauth-manual-box" data-provider-account-oauth>
+        <p class="muted-text">{{if eq $.Lang "vi"}}Lưu account trước để hệ thống liên kết OAuth vào đúng account này.{{else}}Save the account first so OAuth is linked to this specific account.{{end}}</p>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary js-account-oauth-open" disabled>{{if eq $.Lang "vi"}}Mở OAuth trên trình duyệt này{{else}}Open OAuth in this browser{{end}}</button>
+          <button type="button" class="btn-secondary js-account-oauth-create-link" disabled>{{if eq $.Lang "vi"}}Tạo link để copy{{else}}Create link to copy{{end}}</button>
+        </div>
+        <div class="account-oauth-manual" hidden>
+          <label>{{if eq $.Lang "vi"}}Link xác thực{{else}}Authorization link{{end}}<textarea data-account-oauth-auth-link readonly rows="3"></textarea></label>
+          <button type="button" class="btn-secondary js-account-oauth-copy-link">{{if eq $.Lang "vi"}}Copy link xác thực{{else}}Copy authorization link{{end}}</button>
+          <label>{{if eq $.Lang "vi"}}Callback/Auth link sau khi đăng nhập{{else}}Callback/Auth link after sign-in{{end}}<textarea data-account-oauth-callback-link rows="3" placeholder="http://localhost:1455/auth/callback?code=..."></textarea></label>
+          <button type="button" class="btn-secondary js-account-oauth-complete">{{if eq $.Lang "vi"}}Hoàn tất OAuth{{else}}Complete OAuth{{end}}</button>
+        </div>
+      </section>
+      {{end}}
+      <div class="form-actions wide"><button type="submit" data-provider-account-submit>{{if eq $.Lang "vi"}}Lưu tài khoản{{else}}Save account{{end}}</button><button type="button" class="btn-secondary" data-close-modal>{{tr $.T "common.cancel"}}</button></div>
+      <div class="wide provider-result" data-provider-account-result aria-live="polite"></div>
+    </form>
+  </article>
+</div>
+{{end}}
 {{end}}
 
 {{with .SelectedProvider}}
@@ -265,3 +437,4 @@
 </div>
 
 {{template "layout_end" .}}
+

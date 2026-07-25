@@ -52,13 +52,13 @@
           <small>{{if eq .Lang "vi"}}Để trống = planner.{{else}}Blank = planner.{{end}}</small>
         </label>
       </div>
-      <label class="combo-toggle-card" style="justify-content:flex-start;text-align:left;align-items:flex-start;">
-        <span style="text-align:left;"><strong>{{if eq .Lang "vi"}}Đang bật{{else}}Enabled{{end}}</strong><small>{{if eq .Lang "vi"}}Bật để router xuất hiện trong /v1/models.{{else}}Expose this router in /v1/models.{{end}}</small></span>
-        <input name="enabled" type="checkbox" checked style="margin-left:auto;">
+      <label class="combo-toggle-card is-start">
+        <span><strong>{{if eq .Lang "vi"}}Đang bật{{else}}Enabled{{end}}</strong><small>{{if eq .Lang "vi"}}Bật để router xuất hiện trong /v1/models.{{else}}Expose this router in /v1/models.{{end}}</small></span>
+        <input name="enabled" type="checkbox" checked>
       </label>
-      <label class="combo-toggle-card" style="justify-content:flex-start;text-align:left;align-items:flex-start;">
-        <span style="text-align:left;"><strong>{{if eq .Lang "vi"}}D&#249;ng prompt raw g&#7889;c cho classifier{{else}}Use raw original prompt for classifier{{end}}</strong><small>{{if eq .Lang "vi"}}M&#7863;c &#273;&#7883;nh t&#7855;t &#273;&#7875; ti&#7871;t ki&#7879;m token. B&#7853;t l&#234;n c&#243; th&#7875; t&#259;ng &#273;&#7897; ch&#237;nh x&#225;c ph&#226;n lo&#7841;i nh&#432;ng s&#7869; t&#259;ng token/chi ph&#237; r&#7845;t m&#7841;nh.{{else}}Off by default to save tokens. Turning this on can improve routing accuracy but may greatly increase token usage/cost.{{end}}</small></span>
-        <input name="use_raw_prompt" type="checkbox" style="margin-left:auto;">
+      <label class="combo-toggle-card is-start">
+        <span><strong>{{if eq .Lang "vi"}}D&#249;ng prompt raw g&#7889;c cho classifier{{else}}Use raw original prompt for classifier{{end}}</strong><small>{{if eq .Lang "vi"}}M&#7863;c &#273;&#7883;nh t&#7855;t &#273;&#7875; ti&#7871;t ki&#7879;m token. B&#7853;t l&#234;n c&#243; th&#7875; t&#259;ng &#273;&#7897; ch&#237;nh x&#225;c ph&#226;n lo&#7841;i nh&#432;ng s&#7869; t&#259;ng token/chi ph&#237; r&#7845;t m&#7841;nh.{{else}}Off by default to save tokens. Turning this on can improve routing accuracy but may greatly increase token usage/cost.{{end}}</small></span>
+        <input name="use_raw_prompt" type="checkbox">
       </label>
       <label class="wide dashboard-message-field">{{if eq .Lang "vi"}}Prompt điều phối classifier{{else}}Classifier prompt template{{end}}
         <textarea name="classifier_prompt_template" placeholder="Classify the user's raw prompt into exactly one role from this list: {{`{{roles}}`}}. {{`{{json_schema}}`}}"></textarea>
@@ -79,7 +79,7 @@
     <input type="hidden" name="role_count" id="router-role-count" value="5">
     <div id="router-role-list">
       {{range $i := seq 1 5}}
-      <div class="combo-form-card router-role-card" style="margin-bottom:1rem;" data-router-role-row>
+      <div class="combo-form-card router-role-card" data-router-role-row>
         <div class="combo-field-stack">
           <div class="combo-field-row combo-field-row-routing">
             <label>Role
@@ -94,7 +94,7 @@
             <label>Target model / combo
               <input name="target_{{$i}}" list="router-target-options" placeholder="để trống = fallback target">
             </label>
-            <label class="combo-toggle-card" style="min-height:42px;">
+            <label class="combo-toggle-card is-compact">
               <span><strong>Inject instruction</strong></span>
               <input name="inject_{{$i}}" type="checkbox" checked>
             </label>
@@ -108,14 +108,14 @@
       {{end}}
     </div>
     <template id="router-role-template">
-      <div class="combo-form-card router-role-card" style="margin-bottom:1rem;" data-router-role-row>
+      <div class="combo-form-card router-role-card" data-router-role-row>
         <div class="combo-field-stack">
           <div class="combo-field-row combo-field-row-routing">
             <label>Role <input data-role-field="role" placeholder="security"></label>
             <label>Complexity <select data-role-field="complexity"><option value="">any</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></label>
             <label>Risk <select data-role-field="risk"><option value="">any</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></label>
             <label>Target model / combo <input data-role-field="target" list="router-target-options" placeholder="openai/gpt-4.1"></label>
-            <label class="combo-toggle-card" style="min-height:42px;"><span><strong>Inject instruction</strong></span><input data-role-field="inject" type="checkbox" checked></label>
+            <label class="combo-toggle-card is-compact"><span><strong>Inject instruction</strong></span><input data-role-field="inject" type="checkbox" checked></label>
           </div>
           <label class="wide dashboard-message-field">Instruction <textarea data-role-field="instruction" placeholder="Describe what this role should focus on."></textarea></label>
           <div class="combo-actions-row">
@@ -173,7 +173,7 @@
           <a class="btn-secondary" href="/api/prompt-routers/export?name={{.Name | urlquery}}" download="prompt-router-{{.Name | urlquery}}.json">{{if eq $.Lang "vi"}}Xuất JSON{{else}}Export JSON{{end}}</a>
           <button type="button" class="btn-secondary js-copy-prompt-router-json">{{if eq $.Lang "vi"}}Copy JSON{{else}}Copy JSON{{end}}</button>
           <button type="button" class="btn-secondary js-edit-prompt-router">{{tr $.T "common.edit"}}</button>
-          <form method="post" style="display:inline;"><input type="hidden" name="action" value="delete"><input type="hidden" name="name" value="{{.Name}}"><button type="submit" class="btn-secondary">{{tr $.T "common.delete"}}</button></form>
+          <form method="post" class="inline-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="name" value="{{.Name}}"><button type="submit" class="btn-secondary">{{tr $.T "common.delete"}}</button></form>
         </div>
       </div>
       <div class="combo-metrics-row">

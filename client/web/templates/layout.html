@@ -5,43 +5,113 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Title}} · {{tr .T "app.name"}}</title>
-  <link rel="stylesheet" href="/static/app.css?v=20260611-raw3">
-  <link rel="stylesheet" href="/static/provider-actions.css?v=20260613-usage1">
-  <link rel="stylesheet" href="/static/usage-dashboard.css?v=20260611-live1">
-  <style>.request-filter-bar{display:flex;align-items:center;gap:.75rem;margin:1rem 0}.request-filter-bar input{flex:1;min-width:220px}.request-table-wrap small[title]{cursor:help}.checkbox-inline{display:flex!important;align-items:center;gap:.55rem;white-space:nowrap}.checkbox-inline span{display:inline-flex;align-items:center;gap:.35rem}.copy-input-row{display:flex;gap:.45rem;align-items:center}.copy-input-row input{min-width:0;flex:1}.inline-actions{display:flex;gap:.4rem;align-items:center}.badge-primary-status.badge-error{font-weight:800;box-shadow:0 0 0 1px rgba(248,113,113,.35)}.provider-badge-row{display:flex!important;flex-wrap:wrap;gap:4px;align-items:center}.provider-warning-danger{border-color:rgba(248,113,113,.45);background:rgba(127,29,29,.22);color:#fecaca}.pricing-model-chip-list{max-height:360px;overflow:auto}.notice{transition:opacity .6s ease,transform .6s ease}.notice.is-hiding{opacity:0;transform:translateY(-8px)}.chip-test-btn[hidden]{display:none!important}.language-switch{display:flex;gap:.35rem;align-items:center}.language-switch a{padding:.3rem .55rem;border:1px solid rgba(148,163,184,.25);border-radius:999px;text-decoration:none}.language-switch a.active{background:rgba(59,130,246,.22);border-color:rgba(59,130,246,.55)}.combo-builder-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.75fr);gap:1rem}.combo-builder-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem}.combo-description-field{grid-column:1/-1}.compact-title-row{margin-bottom:.75rem}.combo-selected-box,.combo-model-picker-panel{background:rgba(8,13,25,.28);border:1px solid var(--border);border-radius:1rem;padding:1rem}.combo-selected-list{display:flex;flex-wrap:wrap;gap:.5rem;min-height:58px}.combo-selected-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .35rem;border:1px solid rgba(110,231,249,.25);border-radius:999px;background:rgba(110,231,249,.08)}.combo-selected-chip button{padding:.05rem .45rem;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.34);color:#fecaca}.combo-model-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.65rem;max-height:430px;overflow:auto}.combo-model-option{text-align:left;display:grid;gap:.18rem;padding:.75rem;border:1px solid var(--border);border-radius:.85rem;background:rgba(8,13,25,.45);color:var(--text);cursor:pointer}.combo-model-option:hover{border-color:rgba(110,231,249,.55);background:rgba(110,231,249,.1)}.combo-model-option span,.combo-model-option small{color:var(--muted)}.combo-model-option strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.combo-model-option[hidden]{display:none!important}@media(max-width:720px){.request-filter-bar{align-items:stretch;flex-direction:column}.copy-input-row{flex-direction:column;align-items:stretch}.checkbox-inline{white-space:normal}.inline-actions{flex-wrap:wrap}.combo-builder-grid{grid-template-columns:1fr}.combo-model-picker{grid-template-columns:1fr}}</style>
-  <style>.combo-page .combo-selected-list{align-content:flex-start;min-height:88px;padding:.75rem;border:1px dashed rgba(110,231,249,.24);border-radius:.85rem;background:rgba(8,13,25,.28)}.combo-page .combo-selected-chip{max-width:100%;padding:.3rem .36rem}.combo-page .combo-selected-chip code{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:transparent;border:0;padding:0;color:#dff9ff}.combo-page .combo-selected-chip button{display:grid;place-items:center;width:22px;height:22px;padding:0}.combo-page .combo-model-picker{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.7rem;max-height:470px;padding:.15rem .2rem .2rem 0}.combo-page .combo-model-option{gap:.2rem;padding:.85rem;border:1px solid rgba(41,54,83,.9);border-radius:.9rem;background:linear-gradient(180deg,rgba(15,23,42,.54),rgba(8,13,25,.42));transition:border-color .18s ease,transform .18s ease,background .18s ease}.combo-page .combo-model-option:hover{transform:translateY(-1px)}.combo-page .combo-model-option span{color:#93c5fd;font-size:.75rem;font-weight:900;text-transform:uppercase;letter-spacing:.04em}.combo-page .combo-model-option small{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.combo-page .combo-field-stack{display:grid!important;gap:1rem}.combo-page .combo-field-row{display:grid!important;gap:.8rem}.combo-page .combo-field-row-primary{grid-template-columns:minmax(240px,.8fr) minmax(280px,1.2fr)}.combo-page .combo-field-row-routing{grid-template-columns:minmax(180px,1.1fr) minmax(150px,.8fr) minmax(170px,.9fr)}.combo-page .combo-field-stack label{display:flex!important;flex-direction:column!important;gap:.42rem;color:#cfe0ff}.combo-page .combo-field-stack input,.combo-page .combo-field-stack select{height:42px;width:100%;background:#08101f;color:var(--text);border:1px solid var(--border);border-radius:.7rem;padding:.68rem .75rem}.combo-page .combo-field-stack small{display:block;min-height:2.2em;color:var(--muted);font-size:.76rem;line-height:1.35}.combo-page .combo-toggle-card{display:flex!important;flex-direction:row!important;align-items:center;justify-content:space-between;gap:1rem;padding:.85rem 1rem;border:1px solid rgba(110,231,249,.22);border-radius:.9rem;background:rgba(8,13,25,.34)}.combo-page .combo-toggle-card span{display:grid!important;gap:.2rem}.combo-page .combo-toggle-card input{flex:0 0 auto;width:20px;height:20px;accent-color:#22d3ee}@media(max-width:760px){.combo-page .combo-field-row-primary,.combo-page .combo-field-row-routing{grid-template-columns:1fr}.combo-page .combo-field-stack small{min-height:auto}.combo-page .combo-toggle-card{align-items:flex-start}}@media(max-width:640px){.combo-page .combo-model-picker{grid-template-columns:1fr}}</style>
+  <link rel="stylesheet" href="/static/tokens.css?v=20260717-pricing-table1">
+  <link rel="stylesheet" href="/static/app.css?v=20260717-pricing-table1">
+  <link rel="stylesheet" href="/static/components.css?v=20260724-guardrails-toggles1">
+  <link rel="stylesheet" href="/static/provider-actions.css?v=20260719-provider-picker1">
+  <link rel="stylesheet" href="/static/usage-dashboard.css?v=20260717-pricing-table1">
+  <link rel="stylesheet" href="/static/chat-studio.css?v=20260719-chat1">
 </head>
 <body>
-<header class="topbar">
-  <div>
-    <strong>{{tr .T "app.name"}}</strong>
-    <span>{{tr .T "app.tagline"}}</span>
-  </div>
-  <nav>
-    <a href="/dashboard">{{tr .T "nav.dashboard"}}</a>
-    <a href="/providers">{{tr .T "nav.providers"}}</a>
-    <a href="/proxies">{{tr .T "nav.proxies"}}</a>
-    <a href="/requests">{{tr .T "nav.requests"}}</a>
-    <a href="/api-keys">{{tr .T "nav.api_keys"}}</a>
-    <a href="/pricing">{{tr .T "nav.pricing"}}</a>
-    <a href="/combos">{{tr .T "nav.combos"}}</a>
-    <a href="/prompt-routers">{{tr .T "nav.prompt_routers"}}</a>
-    <a href="/settings">{{tr .T "nav.settings"}}</a>
-  </nav>
-  <div class="language-switch" aria-label="Language">
-    <a href="?lang=vi" class="{{if eq .Lang "vi"}}active{{end}}">VI</a>
-    <a href="?lang=en" class="{{if eq .Lang "en"}}active{{end}}">EN</a>
-  </div>
-</header>
-<main class="container">
+<div class="app-shell">
+  <div class="sidebar-backdrop" data-close-sidebar></div>
+  <aside class="sidebar" id="app-sidebar">
+    <a class="sidebar-brand" href="/dashboard">
+      <span class="brand-mark">VR</span>
+      <span class="brand-text">
+        <strong>{{tr .T "app.name"}}</strong>
+        <span>{{tr .T "app.tagline"}}</span>
+      </span>
+    </a>
+    <nav class="sidebar-nav" aria-label="Primary">
+      <a class="nav-item {{if eq .ActivePath "/dashboard"}}is-active{{end}}" href="/dashboard" {{if eq .ActivePath "/dashboard"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        <span>{{tr .T "nav.dashboard"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/providers"}}is-active{{end}}" href="/providers" {{if eq .ActivePath "/providers"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="8" height="8" rx="1"/></svg>
+        <span>{{tr .T "nav.providers"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/chat-studio"}}is-active{{end}}" href="/chat-studio" {{if eq .ActivePath "/chat-studio"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>
+        <span>{{tr .T "nav.chat_studio"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/media"}}is-active{{end}}" href="/media" {{if eq .ActivePath "/media"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        <span>{{tr .T "nav.media"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/proxies"}}is-active{{end}}" href="/proxies" {{if eq .ActivePath "/proxies"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v6a3 3 0 0 0 3 3h6"/></svg>
+        <span>{{tr .T "nav.proxies"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/requests"}}is-active{{end}}" href="/requests" {{if eq .ActivePath "/requests"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v6H4z"/><path d="M4 14h16v6H4z"/><path d="M8 7h.01M8 17h.01"/></svg>
+        <span>{{tr .T "nav.requests"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/api-keys"}}is-active{{end}}" href="/api-keys" {{if eq .ActivePath "/api-keys"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4l2 2-2 2 1 1-2 2-1-1-2 2"/></svg>
+        <span>{{tr .T "nav.api_keys"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/pricing"}}is-active{{end}}" href="/pricing" {{if eq .ActivePath "/pricing"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <span>{{tr .T "nav.pricing"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/invoices"}}is-active{{end}}" href="/invoices" {{if eq .ActivePath "/invoices"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>
+        <span>{{if eq .Lang "vi"}}Hóa đơn{{else}}Invoices{{end}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/data"}}is-active{{end}}" href="/data" {{if eq .ActivePath "/data"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+        <span>{{if eq .Lang "vi"}}Dữ liệu{{else}}Data{{end}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/combos"}}is-active{{end}}" href="/combos" {{if eq .ActivePath "/combos"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        <span>{{tr .T "nav.combos"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/prompt-routers"}}is-active{{end}}" href="/prompt-routers" {{if eq .ActivePath "/prompt-routers"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="5" r="3"/><circle cx="18" cy="19" r="3"/><path d="M9 12h3l3-7M12 12l3 7"/></svg>
+        <span>{{tr .T "nav.prompt_routers"}}</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/guardrails"}}is-active{{end}}" href="/guardrails" {{if eq .ActivePath "/guardrails"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 6v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span>Guardrails</span>
+      </a>
+      <a class="nav-item {{if eq .ActivePath "/settings"}}is-active{{end}}" href="/settings" {{if eq .ActivePath "/settings"}}aria-current="page"{{end}}>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>{{tr .T "nav.settings"}}</span>
+      </a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="sidebar-status">
+        <span class="dot {{if .Settings.RequireAPIKey}}is-protected{{end}}"></span>
+        <span>{{.Config.Host}}:{{.Config.Port}}</span>
+      </div>
+      <div class="language-switch" aria-label="Language">
+        <a href="?lang=vi" class="{{if eq .Lang "vi"}}active{{end}}">VI</a>
+        <a href="?lang=en" class="{{if eq .Lang "en"}}active{{end}}">EN</a>
+      </div>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <header class="topbar">
+      <button class="sidebar-toggle" type="button" data-toggle-sidebar aria-label="Menu" aria-controls="app-sidebar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="topbar-title"><h1>{{.Title}}</h1></div>
+      <div class="topbar-spacer"></div>
+    </header>
+    <main class="container">
 {{if .Saved}}<div class="notice">{{tr .T "common.saved"}}</div>{{end}}
 {{end}}
 
 {{define "layout_end"}}
-</main>
-<footer class="footer">{{tr .T "app.name"}} · Port: <code>20129</code> · Endpoint base: <code>http://localhost:20129/v1</code></footer>
+    </main>
+    <footer class="footer">{{tr .T "app.name"}} · Port: <code>{{.Config.Port}}</code> · Endpoint: <code>http://{{.Config.Host}}:{{.Config.Port}}/v1</code></footer>
+  </div>
+</div>
 <script>window.VivuRouterI18n={lang:{{printf "%q" .Lang}},messages:{{json .T}}};</script>
-<script src="/static/app.js?v=20260624-usage-stats1"></script>
+<script src="/static/app.js?v=20260724-guardrails-toggles1"></script>
 </body>
 </html>
 {{end}}

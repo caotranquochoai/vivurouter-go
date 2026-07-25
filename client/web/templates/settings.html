@@ -11,6 +11,17 @@
   <section class="panel settings-card">
     <h2>{{if eq .Lang "vi"}}Cổng gateway{{else}}Gateway{{end}}</h2>
     <div class="form-grid">
+      <label>{{if eq .Lang "vi"}}Host lắng nghe{{else}}Bind host{{end}}
+        <select name="bind_host">
+          <option value="127.0.0.1" {{if or (eq .Settings.BindHost "") (eq .Settings.BindHost "127.0.0.1")}}selected{{end}}>127.0.0.1 — {{if eq .Lang "vi"}}chỉ máy local{{else}}local only{{end}}</option>
+          <option value="0.0.0.0" {{if eq .Settings.BindHost "0.0.0.0"}}selected{{end}}>0.0.0.0 — {{if eq .Lang "vi"}}cho phép qua reverse proxy/network{{else}}expose through proxy/network{{end}}</option>
+        </select>
+        <small class="muted-text">{{if eq .Lang "vi"}}Thay đổi có hiệu lực sau khi khởi động lại. 0.0.0.0 yêu cầu HTTPS reverse proxy, API key và passcode quản trị.{{else}}Changes apply after restart. 0.0.0.0 requires an HTTPS reverse proxy, API key, and admin passcode.{{end}}</small>
+      </label>
+      <label>Port
+        <input name="bind_port" type="number" min="1" max="65535" value="{{if .Settings.BindPort}}{{.Settings.BindPort}}{{else}}{{.Config.Port}}{{end}}" required>
+        <small class="muted-text">{{if eq .Lang "vi"}}Có hiệu lực sau restart. Nếu đổi port, hãy cập nhật proxy_pass của reverse proxy.{{else}}Applies after restart. Update the reverse proxy target when changing ports.{{end}}</small>
+      </label>
       <label>{{if eq .Lang "vi"}}Provider mặc định{{else}}Default provider{{end}}
         <select name="default_provider">
           {{range .Providers}}<option value="{{.ID}}" {{if eq $.Settings.DefaultProvider .ID}}selected{{end}}>{{.ID}} ({{.Type}})</option>{{end}}
@@ -26,6 +37,7 @@
       <label class="checkbox wide checkbox-inline"><input name="observability_enabled" type="checkbox" {{if .Settings.ObservabilityEnabled}}checked{{end}}> <span>{{if eq .Lang "vi"}}Bật Observability{{else}}Enable Observability{{end}}</span></label>
       <label class="checkbox wide checkbox-inline"><input name="save_raw_prompt" type="checkbox" {{if .Settings.SaveRawPrompt}}checked{{end}}> <span>{{if eq .Lang "vi"}}Lưu raw prompt/request body để debug{{else}}Save raw prompt/request body for debug{{end}}</span></label>
       <label class="checkbox wide checkbox-inline"><input name="save_raw_tool_result" type="checkbox" {{if .Settings.SaveRawToolResult}}checked{{end}}> <span>{{if eq .Lang "vi"}}Lưu raw tool result để debug{{else}}Save raw tool results for debug{{end}}</span></label>
+      <label class="checkbox wide checkbox-inline"><input name="save_raw_response" type="checkbox" {{if .Settings.SaveRawResponse}}checked{{end}}> <span>{{if eq .Lang "vi"}}Lưu phản hồi LLM/upstream để debug{{else}}Save LLM/upstream responses for debugging{{end}}</span></label>
       <label class="checkbox wide checkbox-inline"><input name="mask_debug_secrets" type="checkbox" {{if .Settings.MaskDebugSecrets}}checked{{end}}> <span>{{if eq .Lang "vi"}}Mask secret trước khi lưu debug payload{{else}}Mask secrets before saving debug payloads{{end}}</span></label>
       <label class="checkbox wide checkbox-inline"><input name="compact_debug_payloads" type="checkbox" {{if .Settings.CompactDebugPayloads}}checked{{end}}> <span>{{if eq .Lang "vi"}}Compact debug/log payload khi lưu{{else}}Compact debug/log payloads when storing{{end}}</span></label>
       <p class="wide provider-warning">{{if eq .Lang "vi"}}Raw prompt/tool result có thể chứa nội dung file, dữ liệu người dùng hoặc secret. Chỉ bật khi debug, nên giữ masking và giới hạn dung lượng. API key trong nhật ký chỉ lưu dạng masked để vẫn lọc được key đang dùng.{{else}}Raw prompt/tool results may contain file contents, user data, or secrets. Enable only while debugging, keep masking on, and keep a size limit. API keys in logs are stored masked but still searchable.{{end}}</p>
@@ -112,7 +124,7 @@
     <div class="form-grid">
       <label class="wide">{{if eq .Lang "vi"}}File backup{{else}}Backup file{{end}}<input name="db_file" type="file" form="restore-db-form" required></label>
       <p class="wide provider-warning provider-warning-danger">{{if eq .Lang "vi"}}Restore sẽ ghi đè DB hiện tại và tạo backup an toàn trước. Nhập RESTORE để xác nhận, sau đó restart server.{{else}}Restore overwrites the current DB and creates a safety backup first. Type RESTORE to confirm, then restart the server.{{end}}</p>
-      <label class="wide">{{if eq .Lang "vi"}}Nhập RESTORE để xác nhận{{else}}Type RESTORE to confirm{{end}}<input id="restore-confirm-input" autocomplete="off" placeholder="RESTORE"></label>
+      <label class="wide">{{if eq .Lang "vi"}}Nhập RESTORE để xác nhận{{else}}Type RESTORE to confirm{{end}}<input id="restore-confirm-input" name="confirm" form="restore-db-form" autocomplete="off" placeholder="RESTORE"></label>
       <div class="form-actions wide"><button type="submit" class="btn-danger" form="restore-db-form" id="restore-db-submit" disabled>{{if eq .Lang "vi"}}Khôi phục DB{{else}}Restore DB{{end}}</button></div>
     </div>
   </section>

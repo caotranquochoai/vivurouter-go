@@ -40,6 +40,12 @@
         <small title="{{.Timestamp}}">{{relativeTime .Timestamp}}</small>
       </div>
       <div class="request-log-metrics">
+        {{if .Media.Operation}}<span class="request-metric accent-cyan"><small>Media</small><strong>{{.Media.Operation}}</strong></span>{{end}}
+        {{if .Media.ImageCount}}<span class="request-metric"><small>Images</small><strong>{{.Media.ImageCount}}{{if .Media.ImageSize}} · {{.Media.ImageSize}}{{end}}{{if .Media.ImageQuality}} · {{.Media.ImageQuality}}{{end}}</strong></span>{{end}}
+        {{if .Media.TTSCharacters}}<span class="request-metric"><small>TTS chars</small><strong>{{.Media.TTSCharacters}}</strong></span>{{end}}
+        {{if .Media.STTDurationMS}}<span class="request-metric"><small>STT audio</small><strong>{{.Media.STTDurationMS}}ms</strong></span>{{end}}
+        {{if .Media.RequestBytes}}<span class="request-metric"><small>Request bytes</small><strong>{{fmtTokensShort .Media.RequestBytes}}</strong></span>{{end}}
+        {{if .Media.ResponseBytes}}<span class="request-metric"><small>Response bytes</small><strong>{{fmtTokensShort .Media.ResponseBytes}}</strong></span>{{end}}
         {{if .RawInputTokens}}<span class="request-metric accent-purple" title="Estimated raw debug/storage input before compacting the saved debug payload: {{fmtTokens .RawInputTokens}} tokens. This is not provider billing and does not mean upstream optimization was enabled."><small>Debug raw</small><strong>{{fmtTokensShort .RawInputTokens}}</strong></span>{{end}}
         <span class="request-metric" title="Provider input tokens actually reported/estimated for the upstream request: {{fmtTokens .PromptTokens}}"><small>Provider input</small><strong>{{fmtTokensShort .PromptTokens}}</strong></span>
         <span class="request-metric" title="Output tokens: {{fmtTokens .CompletionTokens}}"><small>Output</small><strong>{{fmtTokensShort .CompletionTokens}}</strong></span>
@@ -123,17 +129,21 @@
         {{end}}
       </details>
       {{end}}
-      {{if .Debug}}
+      {{if or .Debug $root.Settings.SaveRawResponse}}
       <div class="request-debug-panel is-collapsed">
-        <button type="button" class="btn-secondary request-debug-toggle js-request-debug-toggle">Debug payload {{if .Debug.Redacted}}· redacted{{end}}</button>
+        <button type="button" class="btn-secondary request-debug-toggle js-request-debug-toggle">Debug payload{{if .Debug}}{{if .Debug.Redacted}} · redacted{{end}}{{end}}</button>
         <div class="request-debug-body" hidden>
+          {{if .Debug}}
           <div class="request-debug-summary">
             {{if .Debug.RawPromptBytes}}<small>raw debug prompt {{fmtTokens .Debug.RawPromptBytes}} bytes{{if .Debug.RawPromptTruncated}} · truncated{{end}}</small>{{end}}
             {{if .Debug.RawToolResultBytes}}<small>raw debug tool {{fmtTokens .Debug.RawToolResultBytes}} bytes{{if .Debug.RawToolTruncated}} · truncated{{end}}</small>{{end}}
           {{if .UpstreamTokensSaved}}<small>upstream saved ~{{fmtTokens .UpstreamTokensSaved}} tokens{{if .UpstreamOptimizerEngine}} · optimizer {{.UpstreamOptimizerEngine}}{{end}}{{if .UpstreamOptimizedParts}} · {{.UpstreamOptimizedParts}} part(s){{end}}</small>{{end}}
           {{if .Debug.CompactPromptApplied}}<small>debug prompt compact saved ~{{fmtTokens .Debug.EstimatedPromptTokensSaved}} tokens</small>{{end}}
           {{if .Debug.CompactToolApplied}}<small>debug tool compact saved ~{{fmtTokens .Debug.EstimatedToolTokensSaved}} tokens</small>{{end}}
-        </div>
+          {{if .Debug.RawResponseBytes}}<small>raw LLM response {{fmtTokens .Debug.RawResponseBytes}} bytes{{if .Debug.RawResponseTruncated}} · truncated{{end}}</small>{{end}}
+          {{if .Debug.CompactResponseApplied}}<small>debug response compact saved ~{{fmtTokens .Debug.EstimatedResponseTokensSaved}} tokens</small>{{end}}
+          </div>
+          {{end}}
         {{if .ID}}<button type="button" class="btn-secondary js-request-debug-load" data-request-id="{{.ID}}">View debug</button>{{else}}<span class="muted-text">Restart app to assign request ID before viewing raw</span>{{end}}
         </div>
       </div>
@@ -164,6 +174,8 @@
       <button type="button" class="btn-secondary" data-debug-tab="raw-prompt">Raw prompt</button>
       <button type="button" class="btn-secondary" data-debug-tab="compact-tool">Compact tool result</button>
       <button type="button" class="btn-secondary" data-debug-tab="raw-tool">Raw tool result</button>
+      <button type="button" class="btn-secondary" data-debug-tab="compact-response">Compact LLM response</button>
+      <button type="button" class="btn-secondary" data-debug-tab="raw-response">Raw LLM response</button>
       <button type="button" class="btn-secondary js-request-debug-copy">Copy visible</button>
     </div>
     <pre id="request-debug-raw"></pre>
