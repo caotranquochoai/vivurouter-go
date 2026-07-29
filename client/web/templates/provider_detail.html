@@ -61,12 +61,15 @@
     <article class="provider-detail-card provider-runtime-error"><span>{{if eq $.Lang "vi"}}Lỗi gần nhất{{else}}Last error{{end}}</span>{{if .LastError}}<code title="{{.LastError}}">{{.LastError}}</code>{{else}}<strong class="muted-text">{{if eq $.Lang "vi"}}không có{{else}}none{{end}}</strong>{{end}}</article>
   </div>
 
-  {{if or (eq .Type "codex") (eq .Type "antigravity")}}
+  {{if or (eq .Type "claude") (eq .Type "codex") (eq .Type "antigravity")}}
   <section class="provider-detail-section provider-auth-reconnect-panel">
     <div class="section-title-row compact provider-detail-subhead">
       <div><p class="eyebrow">{{if eq $.Lang "vi"}}Kết nối OAuth/token{{else}}OAuth/token connection{{end}}</p><h2>{{if eq $.Lang "vi"}}Kết nối credential mặc định{{else}}Connect default credential{{end}}</h2><p>{{if eq $.Lang "vi"}}Credential này là fallback khi Account Pool chưa có tài khoản khả dụng. Tạo account OAuth trong Account Pool để quản lý nhiều tài khoản, proxy và cooldown riêng.{{else}}This credential is the fallback when Account Pool has no eligible account. Create OAuth accounts in Account Pool to manage multiple accounts, proxies, and independent cooldowns.{{end}}</p></div>
     </div>
     <div class="form-actions provider-auth-actions">
+      {{if eq .Type "claude"}}
+      <form method="post" action="/api/claude/oauth/start"><input type="hidden" name="provider_id" value="{{.ID}}"><input type="hidden" name="proxy_url" value="{{.ProxyURL}}"><button type="submit" class="btn-secondary">{{if eq $.Lang "vi"}}Kết nối lại Claude OAuth{{else}}Reconnect Claude OAuth{{end}}</button></form>
+      {{end}}
       {{if eq .Type "codex"}}
       <form method="post" action="/api/codex/oauth/start"><input type="hidden" name="provider_id" value="{{.ID}}"><input type="hidden" name="proxy_url" value="{{.ProxyURL}}"><button type="submit" class="btn-secondary">{{if eq $.Lang "vi"}}Kết nối lại Codex OAuth{{else}}Reconnect Codex OAuth{{end}}</button></form>
       {{end}}
@@ -107,7 +110,7 @@
     <div class="provider-action-result" data-provider-result="{{.ID}}" aria-live="polite"></div>
   </section>
 
-  {{if or (eq .Type "codex") (eq .Type "antigravity")}}
+  {{if or (eq .Type "claude") (eq .Type "codex") (eq .Type "antigravity")}}
   <section class="provider-detail-section provider-account-pool-section" data-provider-account-pool data-provider-id="{{.ID}}" data-provider-type="{{.Type}}">
     <div class="section-title-row compact provider-detail-subhead provider-account-pool-head">
       <div>
@@ -131,6 +134,7 @@
         <div class="provider-account-meta"><span class="badge badge-info">OAuth</span><span class="badge badge-ok">{{if eq $.Lang "vi"}}Mặc định{{else}}Default{{end}}</span><span>{{if .ProxyID}}{{if eq $.Lang "vi"}}Proxy pool{{else}}Proxy pool{{end}}: {{.ProxyID}}{{else if .ProxyURL}}{{if eq $.Lang "vi"}}Proxy riêng{{else}}Custom proxy{{end}}{{else}}{{if eq $.Lang "vi"}}Kết nối trực tiếp{{else}}Direct route{{end}}{{end}}</span></div>
         <div class="provider-account-health {{if .Cooldown}}is-cooldown{{end}}">{{if .Cooldown}}{{if eq $.Lang "vi"}}Cooldown còn {{.CooldownRemaining}}{{else}}Cooldown for {{.CooldownRemaining}}{{end}}{{else if .HasCredential}}{{if eq $.Lang "vi"}}Credential đã kết nối{{else}}Credential connected{{end}}{{else}}{{if eq $.Lang "vi"}}Chưa có credential{{else}}Credential missing{{end}}{{end}}</div>
         <div class="provider-account-actions">
+          {{if eq .Type "claude"}}<form method="post" action="/api/claude/oauth/start"><input type="hidden" name="provider_id" value="{{.ID}}"><input type="hidden" name="proxy_url" value="{{.ProxyURL}}"><button type="submit" class="btn-secondary btn-sm">{{if eq $.Lang "vi"}}Kết nối lại{{else}}Reconnect{{end}}</button></form>{{end}}
           {{if eq .Type "codex"}}<form method="post" action="/api/codex/oauth/start"><input type="hidden" name="provider_id" value="{{.ID}}"><input type="hidden" name="proxy_url" value="{{.ProxyURL}}"><button type="submit" class="btn-secondary btn-sm">{{if eq $.Lang "vi"}}Kết nối lại{{else}}Reconnect{{end}}</button></form>{{end}}
           {{if eq .Type "antigravity"}}<form method="post" action="/api/antigravity/oauth/start"><input type="hidden" name="provider_id" value="{{.ID}}"><input type="hidden" name="proxy_url" value="{{.ProxyURL}}"><button type="submit" class="btn-secondary btn-sm">{{if eq $.Lang "vi"}}Kết nối lại{{else}}Reconnect{{end}}</button></form>{{end}}
         </div>
@@ -227,6 +231,7 @@
       <label class="btn-secondary provider-import-btn">{{if eq $.Lang "vi"}}Nhập JSON{{else}}Import JSON{{end}}<input name="provider_file" type="file" accept="application/json,.json" onchange="this.form.submit()" hidden></label>
     </form>
     <button type="button" class="btn-secondary js-fetch-models" data-provider-id="{{.ID}}">{{tr $.T "providers.fetch_models"}}</button>
+    {{if eq .Type "claude"}}<button type="button" class="btn-secondary js-refresh-claude-quota" data-provider-id="{{.ID}}">{{tr $.T "providers.quota"}}</button>{{end}}
     {{if eq .Type "codex"}}<button type="button" class="btn-secondary js-refresh-codex-quota" data-provider-id="{{.ID}}">{{tr $.T "providers.quota"}}</button><button type="button" class="btn-secondary js-codex-reset" data-provider-id="{{.ID}}" data-account-label="{{if eq $.Lang "vi"}}Tài khoản mặc định{{else}}Default account{{end}}" data-credit-count="0" disabled>Codex Reset</button><button type="button" class="btn-secondary js-codex-credit-expiry" data-provider-id="{{.ID}}" data-account-label="{{if eq $.Lang "vi"}}Tài khoản mặc định{{else}}Default account{{end}}">{{if eq $.Lang "vi"}}Hạn credit{{else}}Credit Expiry{{end}}</button>{{end}}
     {{if eq .Type "antigravity"}}<button type="button" class="btn-secondary js-refresh-antigravity-quota" data-provider-id="{{.ID}}">{{tr $.T "providers.quota"}}</button>{{end}}
     <a class="btn-secondary" href="/providers/{{.ID}}?edit=1">{{tr $.T "common.edit"}}</a>
@@ -238,7 +243,7 @@
 {{end}}
 
 {{with .SelectedProvider}}
-{{if or (eq .Type "codex") (eq .Type "antigravity")}}
+{{if or (eq .Type "claude") (eq .Type "codex") (eq .Type "antigravity")}}
 <div class="provider-modal" id="provider-account-export-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="provider-account-export-title">
   <div class="provider-modal-backdrop" data-close-modal></div>
   <article class="provider-modal-card provider-modal-wide">
@@ -279,7 +284,7 @@
 {{end}}
 
 {{with .SelectedProvider}}
-{{if or (eq .Type "codex") (eq .Type "antigravity")}}
+{{if or (eq .Type "claude") (eq .Type "codex") (eq .Type "antigravity")}}
 <div class="provider-modal" id="provider-account-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="provider-account-modal-title">
   <div class="provider-modal-backdrop" data-close-modal></div>
   <article class="provider-modal-card provider-modal-wide">
@@ -293,7 +298,7 @@
       <label>{{if eq $.Lang "vi"}}Loại xác thực{{else}}Auth type{{end}}
         <select name="auth_type" data-account-auth-type>
           {{if eq .Type "openai-compatible"}}<option value="api_key">API key</option><option value="bearer">Bearer token</option>{{end}}
-          {{if or (eq .Type "codex") (eq .Type "antigravity")}}<option value="oauth">OAuth tokens</option>{{end}}
+          {{if or (eq .Type "claude") (eq .Type "codex") (eq .Type "antigravity")}}<option value="oauth">OAuth tokens</option>{{end}}
           {{if or (eq .Type "mimo-free") (eq .Type "opencode")}}<option value="none">No auth</option>{{end}}
         </select>
       </label>
@@ -301,7 +306,7 @@
       <label class="wide" data-account-api-key-field>API Key<input name="api_key" type="password" placeholder="sk-..."></label>
       <label class="wide" data-account-bearer-field hidden>Bearer Token<input name="access_token" type="password" placeholder="Bearer token"></label>
       {{end}}
-      {{if or (eq .Type "codex") (eq .Type "antigravity")}}
+      {{if or (eq .Type "claude") (eq .Type "codex") (eq .Type "antigravity")}}
       <label>Access Token<input name="access_token" type="password" placeholder="OAuth access token"></label>
       <label>Refresh Token<input name="refresh_token" type="password" placeholder="OAuth refresh token"></label>
       <p class="wide muted-text">{{if eq $.Lang "vi"}}Dán token OAuth hiện có hoặc lưu account rồi dùng nút Connect OAuth trong Account Pool để liên kết OAuth riêng cho account đó.{{else}}Paste existing OAuth tokens, or save the account and use its Connect OAuth button in Account Pool to link OAuth specifically to that account.{{end}}</p>
@@ -310,15 +315,15 @@
       <label class="wide">Bearer Token<input name="access_token" type="password" placeholder="Optional bearer token"></label>
       {{end}}
       <label>{{if eq $.Lang "vi"}}Độ ưu tiên{{else}}Priority{{end}}<input name="priority" type="number" min="1" value="1"></label>
-      {{if eq .Type "codex"}}<label>{{if eq $.Lang "vi"}}Giới hạn quota (%){{else}}Quota limit (%){{end}}<input name="quota_limit_percent" type="number" min="0" max="100" step="1" value="0"></label><p class="wide muted-text">{{if eq $.Lang "vi"}}0 = tắt. Account sẽ không nhận tác vụ mới khi Session hoặc Weekly chạm ngưỡng; tác vụ đang chạy không bị chuyển account.{{else}}0 = disabled. The account stops receiving new tasks when Session or Weekly reaches the limit; running tasks are never moved to another account.{{end}}</p>{{end}}
+      {{if or (eq .Type "codex") (eq .Type "claude")}}<label>{{if eq $.Lang "vi"}}Giới hạn quota (%){{else}}Quota limit (%){{end}}<input name="quota_limit_percent" type="number" min="0" max="100" step="1" value="0"></label><p class="wide muted-text">{{if eq $.Lang "vi"}}0 = tắt. Account sẽ không nhận tác vụ mới khi Session hoặc Weekly chạm ngưỡng; tác vụ đang chạy không bị chuyển account.{{if eq .Type "claude"}} Với Claude, mỗi họ model (Opus/Sonnet/Haiku) có window riêng nên chỉ model đúng họ đó bị chặn.{{end}}{{else}}0 = disabled. The account stops receiving new tasks when Session or Weekly reaches the limit; running tasks are never moved to another account.{{if eq .Type "claude"}} For Claude, each model family (Opus/Sonnet/Haiku) has its own window, so only models in that family are held back.{{end}}{{end}}</p>{{end}}
       <label>Proxy Pool
         <select name="proxy_id"><option value="">-- {{if eq $.Lang "vi"}}Không dùng / Custom URL{{else}}None / Custom URL{{end}} --</option>{{range $.Proxies}}<option value="{{.ID}}">{{.Name}} ({{.ID}})</option>{{end}}</select>
       </label>
       <label>Proxy URL (Custom)<input name="proxy_url" placeholder="http://user:pass@host:port"></label>
       <label class="checkbox wide"><input name="enabled" type="checkbox" checked> {{if eq $.Lang "vi"}}Đang bật{{else}}Enabled{{end}}</label>
       <p class="wide muted-text">{{if eq $.Lang "vi"}}Chọn Proxy Pool hoặc nhập Custom Proxy URL. Proxy Pool được ưu tiên khi cả hai cùng có giá trị.{{else}}Choose a Proxy Pool or enter a custom proxy URL. The pool wins when both are set.{{end}}</p>
-      {{if eq .Type "codex"}}
-      <section class="wide oauth-manual-box" data-provider-account-oauth>
+      {{if or (eq .Type "claude") (eq .Type "codex")}}
+      <section class="wide oauth-manual-box" data-provider-account-oauth data-oauth-start="{{if eq .Type "claude"}}/api/claude/oauth/start{{else}}/api/codex/oauth/start{{end}}" data-oauth-complete="{{if eq .Type "claude"}}/api/claude/oauth/complete{{else}}/api/codex/oauth/complete{{end}}">
         <p class="muted-text">{{if eq $.Lang "vi"}}Lưu account trước để hệ thống liên kết OAuth vào đúng account này.{{else}}Save the account first so OAuth is linked to this specific account.{{end}}</p>
         <div class="form-actions">
           <button type="button" class="btn-secondary js-account-oauth-open" disabled>{{if eq $.Lang "vi"}}Mở OAuth trên trình duyệt này{{else}}Open OAuth in this browser{{end}}</button>
@@ -400,6 +405,7 @@
       <label>Type
         <select name="type">
           <option value="openai-compatible" {{with .EditProvider}}{{if eq .Type "openai-compatible"}}selected{{end}}{{end}}>openai-compatible</option>
+          <option value="claude" {{with .EditProvider}}{{if eq .Type "claude"}}selected{{end}}{{end}}>claude</option>
           <option value="codex" {{with .EditProvider}}{{if eq .Type "codex"}}selected{{end}}{{end}}>codex</option>
           <option value="mimo-free" {{with .EditProvider}}{{if eq .Type "mimo-free"}}selected{{end}}{{end}}>mimo-free</option>
           <option value="opencode" {{with .EditProvider}}{{if eq .Type "opencode"}}selected{{end}}{{end}}>opencode</option>
@@ -409,6 +415,9 @@
       <label>{{if eq .Lang "vi"}}Tên hiển thị{{else}}Name{{end}}<input name="name" placeholder="OpenAI Main" value="{{with .EditProvider}}{{.Name}}{{end}}"></label>
       <label>Base URL<input name="base_url" placeholder="https://api.openai.com/v1" value="{{with .EditProvider}}{{.BaseURL}}{{end}}"></label>
       <label>{{if eq .Lang "vi"}}API Key{{else}}API Key{{end}}<input name="api_key" type="password" placeholder='{{if .EditProvider}}{{if eq $.Lang "vi"}}để trống để giữ API key hiện tại{{else}}leave blank to keep current API key{{end}}{{else}}sk-...{{end}}'></label>
+      {{with .EditProvider}}{{if eq .Type "claude"}}
+      <p class="muted-text">{{if eq $.Lang "vi"}}Với provider Claude, API key <code>sk-ant-api…</code> được dùng cho lưu lượng do router tự sinh (test model, Prompt Router classifier, Guardrail optimizer/validator, Fusion). Hội thoại thật vẫn dùng OAuth. Bỏ trống thì mọi thứ dùng OAuth như trước.{{else}}On a Claude provider, an <code>sk-ant-api…</code> key bills router-originated traffic (model tests, Prompt Router classifier, Guardrail optimizer/validator, Fusion). Real conversations still use OAuth. Leave blank to keep everything on OAuth.{{end}}</p>
+      {{end}}{{end}}
       <label>{{if eq .Lang "vi"}}Access Token{{else}}Access Token{{end}}<input name="access_token" type="password" placeholder='{{if .EditProvider}}{{if eq $.Lang "vi"}}để trống để giữ access token{{else}}leave blank to keep access token{{end}}{{else}}{{if eq $.Lang "vi"}}Bearer token tùy chọn{{else}}Optional bearer token{{end}}{{end}}'></label>
       <label>{{if eq .Lang "vi"}}Refresh Token{{else}}Refresh Token{{end}}<input name="refresh_token" type="password" placeholder='{{if .EditProvider}}{{if eq $.Lang "vi"}}để trống để giữ refresh token{{else}}leave blank to keep refresh token{{end}}{{else}}{{if eq $.Lang "vi"}}Refresh token tùy chọn{{else}}Optional refresh token{{end}}{{end}}'></label>
       {{$provProxyID := ""}}

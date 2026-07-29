@@ -22,6 +22,7 @@
     <button type="button" class="provider-add-btn provider-add-wide js-provider-add-toggle" aria-expanded="false">+ {{if eq .Lang "vi"}}Thêm provider{{else}}Add provider{{end}}</button>
     <div class="provider-preset-dropdown" hidden>
       <div class="provider-preset-group"><span>{{if eq .Lang "vi"}}OAuth / đăng nhập{{else}}OAuth / account login{{end}}</span>
+        <button type="button" data-open-modal="claude-oauth-modal">Claude Code OAuth <small>{{if eq .Lang "vi"}}Đăng nhập Claude · compatibility flow{{else}}Claude login · compatibility flow{{end}}</small></button>
         <button type="button" data-open-modal="oauth-provider-modal">Codex OAuth <small>{{if eq .Lang "vi"}}Đăng nhập OAuth/local token{{else}}OAuth/local token login{{end}}</small></button>
         <button type="button" data-open-modal="antigravity-oauth-modal">Antigravity OAuth <small>{{if eq .Lang "vi"}}Lấy Google OAuth token{{else}}Google OAuth token login{{end}}</small></button>
       </div>
@@ -70,6 +71,23 @@
 {{else}}
 <section class="empty-state"><h2>{{tr .T "providers.no_provider"}}</h2><p>{{if eq .Lang "vi"}}Thêm OpenAI-compatible provider hoặc kết nối Codex OAuth để bắt đầu.{{else}}Add an OpenAI-compatible provider or connect Codex OAuth to get started.{{end}}</p></section>
 {{end}}
+
+<div class="provider-modal" id="claude-oauth-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="claude-oauth-modal-title">
+  <div class="provider-modal-backdrop" data-close-modal></div>
+  <section class="provider-modal-card">
+    <header><div><p class="eyebrow">OAuth · Native Anthropic · Risk notice</p><h2 id="claude-oauth-modal-title">Claude Code OAuth</h2></div><button type="button" class="provider-modal-close" data-close-modal aria-label="Close">×</button></header>
+    <p>{{if eq .Lang "vi"}}Flow tương thích không chính thức, có thể thay đổi theo chính sách Anthropic. Chỉ dùng với tài khoản bạn được phép sử dụng.{{else}}Unofficial compatibility flow that may change with Anthropic policy. Use only with an account you are authorized to use.{{end}}</p>
+    <form method="post" action="/api/claude/oauth/start" class="provider-form-grid provider-form-single">
+      <label>Provider ID<input name="provider_id" value="claude" placeholder="claude"></label>
+      <label>{{if eq .Lang "vi"}}Proxy từ pool{{else}}Proxy pool{{end}}<select name="proxy_id"><option value="">{{if eq .Lang "vi"}}Không dùng proxy pool{{else}}No pool proxy{{end}}</option>{{range .Proxies}}{{if .Enabled}}<option value="{{.ID}}">{{.Name}} · {{.URL}}</option>{{end}}{{end}}</select></label>
+      <label>{{if eq .Lang "vi"}}Proxy URL thủ công (tùy chọn){{else}}Manual proxy URL (optional){{end}}<input name="proxy_url" placeholder="http://127.0.0.1:8080"></label>
+      <div class="wide form-actions"><button type="submit">{{if eq .Lang "vi"}}Mở Claude OAuth{{else}}Open Claude OAuth{{end}}</button><button type="button" class="btn-secondary js-create-oauth-link" data-oauth-start="/api/claude/oauth/start" data-oauth-complete="/api/claude/oauth/complete" data-oauth-box="claude-oauth-manual-box" data-oauth-auth-link="claude-oauth-auth-link" data-oauth-callback-link="claude-oauth-callback-link">{{tr .T "providers.create_link"}}</button></div>
+      <div class="wide oauth-manual-box" id="claude-oauth-manual-box" hidden><label>{{if eq .Lang "vi"}}Link xác thực{{else}}Authorization link{{end}}<textarea id="claude-oauth-auth-link" readonly rows="3"></textarea></label><button type="button" class="btn-secondary js-copy-oauth-link" data-oauth-auth-link="claude-oauth-auth-link">Copy</button><label>Callback URL<textarea id="claude-oauth-callback-link" rows="3"></textarea></label><button type="button" class="btn-secondary js-complete-oauth-link" data-oauth-complete="/api/claude/oauth/complete" data-oauth-callback-link="claude-oauth-callback-link">{{tr .T "providers.complete_oauth"}}</button></div>
+    </form>
+    {{with .ClaudeOAuth}}{{if .Status}}<p class="oauth-status"><strong>Status:</strong> {{.Status}}{{if .Error}} · {{.Error}}{{end}}</p>{{end}}{{end}}
+    <p><small>{{if eq .Lang "vi"}}Callback dùng một cổng loopback ngẫu nhiên tương thích Claude OAuth; cổng cụ thể hiển thị trong link xác thực.{{else}}The callback uses a Claude-compatible dynamic loopback port shown in the authorization link.{{end}}</small></p>
+  </section>
+</div>
 
 <div class="provider-modal" id="oauth-provider-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="oauth-modal-title">
   <div class="provider-modal-backdrop" data-close-modal></div>
@@ -163,6 +181,7 @@
       <label>Type
         <select name="type">
           <option value="openai-compatible" {{with .EditProvider}}{{if eq .Type "openai-compatible"}}selected{{end}}{{end}}>openai-compatible</option>
+          <option value="claude" {{with .EditProvider}}{{if eq .Type "claude"}}selected{{end}}{{end}}>claude</option>
           <option value="codex" {{with .EditProvider}}{{if eq .Type "codex"}}selected{{end}}{{end}}>codex</option>
           <option value="mimo-free" {{with .EditProvider}}{{if eq .Type "mimo-free"}}selected{{end}}{{end}}>mimo-free</option>
           <option value="opencode" {{with .EditProvider}}{{if eq .Type "opencode"}}selected{{end}}{{end}}>opencode</option>

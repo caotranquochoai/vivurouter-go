@@ -173,8 +173,10 @@ function initProviderActions() {
       const params = new URLSearchParams();
       const providerID = form.querySelector('[name="provider_id"]')?.value || "";
       const proxyURL = form.querySelector('[name="proxy_url"], [data-proxy-input]')?.value || "";
+      const proxyID = form.querySelector('[name="proxy_id"]')?.value || "";
       if (providerID) params.set("provider_id", providerID);
-      if (proxyURL) params.set("proxy_url", proxyURL);
+      if (proxyID) params.set("proxy_id", proxyID);
+      else if (proxyURL) params.set("proxy_url", proxyURL);
       params.set("json", "1");
       const startURL = createOAuth.dataset.oauthStart || "/api/codex/oauth/start";
       createOAuth.disabled = true; createOAuth.textContent = t("providers.create_link", "Create link to copy");
@@ -264,15 +266,17 @@ function initProviderActions() {
       finally { fetchModels.disabled = false; fetchModels.textContent = t("providers.fetch_models", "Fetch models"); }
       return;
     }
-    const quota = event.target.closest(".js-refresh-codex-quota, .js-refresh-antigravity-quota");
+    const quota = event.target.closest(".js-refresh-claude-quota, .js-refresh-codex-quota, .js-refresh-antigravity-quota");
     if (quota) {
       event.preventDefault();
       const providerID = quota.dataset.providerId || "";
+      const isClaude = quota.classList.contains("js-refresh-claude-quota");
       const isAntigravity = quota.classList.contains("js-refresh-antigravity-quota");
-      const quotaName = isAntigravity ? "Antigravity" : "Codex";
+      const quotaName = isClaude ? "Claude" : (isAntigravity ? "Antigravity" : "Codex");
       quota.disabled = true; quota.textContent = "Loading...";
       try {
-        const data = await postProviderAction(isAntigravity ? "/api/antigravity/quota" : "/api/codex/quota", { provider_id: providerID });
+        const quotaEndpoint = isClaude ? "/api/claude/quota" : (isAntigravity ? "/api/antigravity/quota" : "/api/codex/quota");
+        const data = await postProviderAction(quotaEndpoint, { provider_id: providerID });
         const quotas = Array.isArray(data.quotas) ? data.quotas : [];
         const cards = quotas.map((q) => {
           const total = Number(q.total || 0), remaining = Number(q.remaining || 0), used = Number(q.used || 0);
@@ -287,7 +291,7 @@ function initProviderActions() {
         const statusLabel = unavailable ? "Unavailable" : (available ? "Available" : "Limit reached");
         const resetCreditCount = Number(data.reset_credits?.available_count || 0);
         document.querySelectorAll(`.js-codex-reset[data-provider-id="${CSS.escape(providerID)}"]:not([data-account-id])`).forEach((button) => { button.dataset.creditCount = String(resetCreditCount); button.disabled = resetCreditCount < 1; button.title = resetCreditCount ? `${resetCreditCount} reset credit(s) available` : "No reset credits available"; });
-        const resetNote = !isAntigravity ? `<p class="muted-text"><strong>${resetCreditCount}</strong> Codex reset credit(s) available.</p>` : "";
+        const resetNote = !isClaude && !isAntigravity ? `<p class="muted-text"><strong>${resetCreditCount}</strong> Codex reset credit(s) available.</p>` : "";
         const html = `<div class="quota-result"><div class="quota-header"><div><strong>${quotaName} quota</strong><small>${escapeHtml(data.plan || "unknown plan")}</small></div><span class="badge badge-${available ? "ok" : "error"}">${statusLabel}</span></div>${cards ? `<div class="quota-grid">${cards}</div>` : `<p class="muted-text">${escapeHtml(data.message || "No quota windows returned.")}</p>`}${resetNote}${modelNote}</div>`;
         setResultHTML(providerID, html, `${quotaName} quota updated`, available);
       } catch (err) { setResult(providerID, err.message || String(err), false); }
@@ -317,7 +321,8 @@ function initProviderActions() {
       try {
         const data = await postProviderAction("/api/providers/test-model", { provider_id: providerID, model });
         const ok = !!data.ok && !data.error;
-        const message = ok ? `OK ${data.status || ""} · ${data.latency_ms || 0}ms` : `Failed ${data.status || ""}: ${data.error || "unknown error"}`;
+        const attempted = Array.isArray(data.attempted_account_ids) && data.attempted_account_ids.length ? ` · accounts: ${data.attempted_account_ids.join(" → ")}` : "";
+        const message = ok ? `OK ${data.status || ""} · ${data.latency_ms || 0}ms${attempted}` : `Failed ${data.status || ""}: ${data.error || "unknown error"}${attempted}`;
         if (chipResult) { chipResult.textContent = message; chipResult.classList.toggle("ok", ok); chipResult.classList.toggle("error", !ok); }
         setResult(providerID, `${model}: ${message}`, ok);
       } catch (err) {
@@ -511,7 +516,11 @@ function initProviderModelCollapse() {
     const oauthManual = form?.querySelector(".account-oauth-manual");
     const oauthAuthLink = form?.querySelector("[data-account-oauth-auth-link]");
     const oauthCallbackLink = form?.querySelector("[data-account-oauth-callback-link]");
+    const oauthStartURL = oauthPanel?.dataset.oauthStart || "/api/codex/oauth/start";
+    const oauthCompleteURL = oauthPanel?.dataset.oauthComplete || "/api/codex/oauth/complete";
+    const supportsAccountOAuth = ["claude", "codex"].includes(pool.dataset.providerType);
     const accountID = () => form?.querySelector('[name="id"]')?.value || "";
+    const accountProxyID = () => form?.querySelector('[name="proxy_id"]')?.value || "";
     const accountProxy = () => form?.querySelector('[name="proxy_url"]')?.value || "";
     const setOAuthEnabled = (enabled) => {
       if (oauthPanel) oauthPanel.hidden = false;
@@ -568,7 +577,7 @@ function initProviderModelCollapse() {
       form.querySelector('[name="proxy_url"]').value = "";
       form.querySelector('[name="enabled"]').checked = !!account.enabled;
       form.querySelector("[data-provider-account-submit]").textContent = text("Cập nhật tài khoản", "Update account");
-      setOAuthEnabled(pool.dataset.providerType === "codex");
+      setOAuthEnabled(supportsAccountOAuth);
     };
     const requestAccountUpdate = async (account, method = "POST") => {
       const response = await fetch(`/api/provider-accounts?provider_id=${encodeURIComponent(providerID)}${method === "DELETE" ? `&id=${encodeURIComponent(account.id)}` : ""}`, {
@@ -590,7 +599,7 @@ function initProviderModelCollapse() {
     importForm?.querySelector(".js-preview-account-backup")?.addEventListener("click", async () => { const output = importForm.querySelector("[data-account-backup-import-result]"); try { const bundle = await readImport(); const response = await fetch("/api/provider-accounts/import-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bundle, passphrase: importForm.querySelector('[name="passphrase"]').value, confirm_plaintext: importForm.querySelector('[name="confirm_plaintext"]').checked }) }); const preview = await safeJSON(response); if (!response.ok) throw new Error(preview.error || "Backup preview failed"); output.textContent = `${text("Tìm thấy", "Found")} ${preview.accounts?.length || 0} ${text("tài khoản", "accounts")} · ${preview.proxy_count || 0} ${text("proxy", "proxies")}`; } catch (error) { output.textContent = error.message || "Backup preview failed."; } });
     importForm?.addEventListener("submit", async (event) => { event.preventDefault(); const output = importForm.querySelector("[data-account-backup-import-result]"); try { const bundle = await readImport(); const data = Object.fromEntries(new FormData(importForm).entries()); const response = await fetch("/api/provider-accounts/import-encrypted", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bundle, passphrase: data.passphrase || "", provider_id: providerID, policy: data.policy, confirm: data.confirm || "", confirm_plaintext: importForm.querySelector('[name="confirm_plaintext"]').checked }) }); const result = await safeJSON(response); if (!response.ok) throw new Error(result.error || "Backup import failed"); output.textContent = `${text("Đã nhập", "Imported")} ${result.imported || 0} · ${text("bỏ qua", "skipped")} ${result.skipped || 0}`; refresh(); } catch (error) { output.textContent = error.message || "Backup import failed."; } });
     const loadQuota = async (account, target, button) => {
-      if (!['codex', 'antigravity'].includes(pool.dataset.providerType) || !account.enabled) return;
+      if (!['claude', 'codex', 'antigravity'].includes(pool.dataset.providerType) || !account.enabled) return;
       if (button) button.disabled = true;
       target.textContent = text("Đang lấy quota…", "Loading quota…");
       try {
@@ -601,8 +610,18 @@ function initProviderModelCollapse() {
         const quotas = Array.isArray(report.quotas) ? report.quotas : [];
         const summary = quotas.map((q) => `${q.name || q.key}: ${Number(q.used || 0).toFixed(0)}%`).join(" · ");
         const limit = Number(account.quota_limit_percent || 0);
-        const routingUsed = quotas.filter((q) => ["session", "weekly"].includes(q.key)).reduce((max, q) => Math.max(max, Number(q.used || 0)), 0);
-        const limitStatus = limit > 0 && routingUsed >= limit ? text(`Đã chạm ngưỡng ${limit.toFixed(0)}% — dừng tác vụ mới`, `Limit ${limit.toFixed(0)}% reached — new tasks paused`) : "";
+        // Claude bills each model family's weekly window separately, so a
+        // per-family window at the limit only pauses that family. Name the
+        // affected windows instead of implying the whole account is paused.
+        const routingQuotas = quotas.filter((q) => ["session", "weekly"].includes(q.key) || (pool.dataset.providerType === "claude" && String(q.key || "").startsWith("weekly_")));
+        const atLimit = limit > 0 ? routingQuotas.filter((q) => Number(q.used || 0) >= limit) : [];
+        let limitStatus = "";
+        if (atLimit.length) {
+          const shared = atLimit.some((q) => q.key === "session" || q.key === "weekly");
+          limitStatus = shared || pool.dataset.providerType !== "claude"
+            ? text(`Đã chạm ngưỡng ${limit.toFixed(0)}% — dừng tác vụ mới`, `Limit ${limit.toFixed(0)}% reached — new tasks paused`)
+            : text(`Đã chạm ngưỡng ${limit.toFixed(0)}% ở ${atLimit.map((q) => q.name || q.key).join(", ")} — chỉ model thuộc họ đó bị dừng`, `Limit ${limit.toFixed(0)}% reached on ${atLimit.map((q) => q.name || q.key).join(", ")} — only those model families are paused`);
+        }
         const resetCount = Number(report.reset_credits?.available_count || 0);
         target.textContent = [summary, limitStatus, pool.dataset.providerType === "codex" ? `${resetCount} reset credit(s)` : ""].filter(Boolean).join(" · ") || report.message || text("Chưa có dữ liệu quota", "No quota data returned");
         const resetButton = target.closest(".provider-account-card")?.querySelector(".js-codex-reset");
@@ -648,7 +667,7 @@ function initProviderModelCollapse() {
             row.querySelector(".provider-account-health").textContent = health;
             const actions = row.querySelector(".provider-account-actions");
             const quota = row.querySelector(".provider-account-quota");
-            if (['codex', 'antigravity'].includes(pool.dataset.providerType)) {
+            if (['claude', 'codex', 'antigravity'].includes(pool.dataset.providerType)) {
               quota.hidden = false;
               const quotaButton = document.createElement("button"); quotaButton.type = "button"; quotaButton.className = "btn-secondary btn-sm"; quotaButton.textContent = text("Quota", "Quota");
               quotaButton.addEventListener("click", () => loadQuota(account, quota, quotaButton));
@@ -684,7 +703,7 @@ function initProviderModelCollapse() {
     form?.addEventListener("submit", async (event) => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(form).entries());
-      if (pool.dataset.providerType === "codex") data.id = ensureAccountID();
+      if (supportsAccountOAuth) data.id = ensureAccountID();
       data.enabled = form.querySelector('[name="enabled"]').checked;
       data.priority = Number(data.priority) || 1;
       if (Object.prototype.hasOwnProperty.call(data, "quota_limit_percent")) data.quota_limit_percent = Number(data.quota_limit_percent) || 0;
@@ -694,7 +713,7 @@ function initProviderModelCollapse() {
         if (!response.ok) throw new Error(payload.error || payload.message || `HTTP ${response.status}`);
         if (result) result.textContent = "Account saved.";
         refresh();
-        if (pool.dataset.providerType === "codex") {
+        if (supportsAccountOAuth) {
           setOAuthEnabled(true);
           showToast("Account saved. Continue with OAuth below.");
         } else {
@@ -712,8 +731,9 @@ function initProviderModelCollapse() {
       oauthOpen.disabled = true;
       try {
         const params = new URLSearchParams({ json: "1", provider_id: providerID, account_id: id });
-        if (accountProxy()) params.set("proxy_url", accountProxy());
-        const res = await fetch(`/api/codex/oauth/start?${params}`, { method: "POST", cache: "no-store", headers: { Accept: "application/json" } });
+        if (accountProxyID()) params.set("proxy_id", accountProxyID());
+        else if (accountProxy()) params.set("proxy_url", accountProxy());
+        const res = await fetch(`${oauthStartURL}?${params}`, { method: "POST", cache: "no-store", headers: { Accept: "application/json" } });
         const payload = await safeJSON(res);
         if (!res.ok || !payload.auth_url) throw new Error(payload.message || payload.error || "OAuth authorization URL was not returned");
         window.open(payload.auth_url, "_blank", "noopener,noreferrer");
@@ -727,8 +747,9 @@ function initProviderModelCollapse() {
       oauthCreateLink.disabled = true;
       try {
         const params = new URLSearchParams({ json: "1", provider_id: providerID, account_id: id });
-        if (accountProxy()) params.set("proxy_url", accountProxy());
-        const res = await fetch(`/api/codex/oauth/start?${params}`, { method: "POST", cache: "no-store", headers: { Accept: "application/json" } });
+        if (accountProxyID()) params.set("proxy_id", accountProxyID());
+        else if (accountProxy()) params.set("proxy_url", accountProxy());
+        const res = await fetch(`${oauthStartURL}?${params}`, { method: "POST", cache: "no-store", headers: { Accept: "application/json" } });
         const payload = await safeJSON(res);
         if (!res.ok || !payload.auth_url) throw new Error(payload.message || payload.error || "OAuth authorization URL was not returned");
         if (oauthAuthLink) oauthAuthLink.value = payload.auth_url;
@@ -741,7 +762,7 @@ function initProviderModelCollapse() {
       const callbackURL = oauthCallbackLink?.value || "";
       event.currentTarget.disabled = true;
       try {
-        const res = await fetch("/api/codex/oauth/complete", { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ callback_url: callbackURL }) });
+        const res = await fetch(oauthCompleteURL, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ callback_url: callbackURL }) });
         const payload = await safeJSON(res);
         if (!res.ok) throw new Error(payload.message || payload.error || "OAuth completion failed");
         refresh();
